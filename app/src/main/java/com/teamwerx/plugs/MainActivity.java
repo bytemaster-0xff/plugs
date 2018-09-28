@@ -1,6 +1,12 @@
 package com.teamwerx.plugs;
 
+import android.content.Context;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.Vibrator;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
@@ -20,9 +26,24 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
-public class MainActivity extends AppCompatActivity implements  IMqttActionListener, MqttCallback {
+public class MainActivity extends AppCompatActivity implements  IMqttActionListener, MqttCallback, SensorEventListener {
 
     MqttAndroidClient mClient;
+
+    private float lastX, lastY, lastZ;
+
+    private SensorManager mSensorManager;
+    private Sensor mAccelerometer;
+    private float mVibrateThreshold = 0;
+    public Vibrator mVibrator;
+
+    private float deltaXMax = 0;
+    private float deltaYMax = 0;
+    private float deltaZMax = 0;
+
+    private float deltaX = 0;
+    private float deltaY = 0;
+    private float deltaZ = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,6 +61,20 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
             }
         });
 
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
+            // success! we have an accelerometer
+
+            mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+            mVibrateThreshold = mAccelerometer.getMaximumRange() / 2;
+
+        } else {
+            Log.d(TAG, "Sorry, no accelerator");
+            // fai! we dont have an accelerometer!
+        }
+
+        mVibrator = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
         Log.d(TAG, "App Startup");
     }
 
@@ -122,5 +157,23 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
     @Override
     public void deliveryComplete(IMqttDeliveryToken token){
         Log.d(TAG, "Delivery complete");
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        deltaX = Math.abs(lastX - event.values[0]);
+        deltaY = Math.abs(lastY - event.values[1]);
+        deltaZ = Math.abs(lastZ - event.values[2]);
+
+        lastX = event.values[0];
+        lastY = event.values[1];
+        lastZ = event.values[2];
+
+        Log.d(TAG, "Message arrived:" + deltaX + ":" + deltaY + ":" + deltaZ);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
     }
 }
