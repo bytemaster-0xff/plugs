@@ -3,8 +3,28 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="com.teamwerx.plugs.MainActivity">
     <item
-        android:id="@+id/action_settings"
+        android:id="@+id/action_mqtt_connect"
         android:orderInCategory="100"
-        android:title="@string/action_settings"
+        android:title="@string/action_mqtt_connect"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_mqtt_disconnect"
+        android:orderInCategory="100"
+        android:title="@string/action_mqtt_disconnect"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_camera_start"
+        android:orderInCategory="100"
+        android:title="@string/action_camera_start"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_take_photo"
+        android:orderInCategory="100"
+        android:title="@string/action_take_photo"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_camera_stop"
+        android:orderInCategory="100"
+        android:title="@string/action_camera_stop"
         app:showAsAction="never" />
 </menu>
