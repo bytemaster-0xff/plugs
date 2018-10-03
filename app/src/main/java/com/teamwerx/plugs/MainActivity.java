@@ -1,47 +1,41 @@
 package com.teamwerx.plugs;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.SurfaceTexture;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.params.StreamConfigurationMap;
-import android.net.Uri;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.Vibrator;
-import android.provider.MediaStore;
-import android.support.annotation.NonNull;
+import android.provider.SyncStateContract;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.util.Size;
 import android.view.TextureView;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.widget.Button;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
-import com.softwarelogistics.nuviot.models.Device;
 import com.teamwerx.plugs.Services.CameraHelper;
+import com.teamwerx.plugs.Services.UploadHelper;
+
+import org.apache.http.entity.mime.HttpMultipartMode;
+import org.apache.http.entity.mime.MultipartEntity;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
@@ -57,13 +51,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.Calendar;
-import java.util.Date;
-import java.util.TimeZone;
+import java.util.UUID;
 
-public class MainActivity extends AppCompatActivity implements  IMqttActionListener, MqttCallback, SensorEventListener {
+public class MainActivity extends AppCompatActivity implements IMqttActionListener, MqttCallback,
+        SensorEventListener, LocationListener {
 
     MqttAndroidClient mClient;
 
@@ -76,8 +68,12 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
 
     TextureView mCameraPreview;
 
-    final String TAG = "PLUGSAPP";
-    final String MQTT_CLIENT = "plugshudson.sofwerx.iothost.net";
+    //final String SERVER_HOST_NAME = "10.1.1.28";
+
+    public final static String TAG = "PLUGSAPP";
+    final String SERVER_HOST_NAME = "plugshudson.sofwerx.iothost.net";
+
+    final int SERVER_HOST_PORT = 8050;
 
     private CameraHelper mCamera;
 
@@ -92,9 +88,21 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
     int TAKE_PHOTO_CODE = 0;
     public static int count = 110;
 
+    private static final long MIN_DISTANCE_CHANGE_FOR_UPDATES = 10; // 10 meters
 
+    // The minimum time between updates in milliseconds
+    private static final long MIN_TIME_BW_UPDATES = 1; // 1 minute
+
+    private static final long MOTION_INTERVAL = 7;
+
+    private Location mLastLocation;
+    private LocationManager mLocationManager;
     private String mDeviceId;
 
+    ProgressBar mProgressBar;
+    TextView mProgressStatus;
+
+    @SuppressLint("MissingPermission")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -103,6 +111,8 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
         setSupportActionBar(toolbar);
 
         mDeviceId = "dev001";
+
+        verifyAppPermissions(this);
 
         mCameraPreview = findViewById(R.id.cameraPreview);
 
@@ -127,7 +137,15 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
             Log.d(TAG, "Sorry, no accelerator");
         }
 
-        verifyStoragePermissions(this);
+        mLocationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
+                MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
+
+        mLastLocation = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        sendLocationInfo(mLastLocation);
+
+        mProgressBar = findViewById(R.id.uploadProgress);
+        mProgressStatus = findViewById(R.id.uploadStatus);
 
         mVibrator = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
         Log.d(TAG, "App Startup");
@@ -137,11 +155,13 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
     boolean mHasGPSPermissions = false;
     boolean mHasCemeraPermissions = false;
 
-
     private static final int REQUEST_EXTERNAL_STORAGE = 1;
-    private static String[] PERMISSIONS_STORAGE = {
+    private static String[] APP_PERMISSIONS = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.CAMERA,
     };
 
@@ -152,15 +172,15 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
      *
      * @param activity
      */
-    public void verifyStoragePermissions(Activity activity) {
+    public void verifyAppPermissions(Activity activity) {
         // Check if we have write permission
         int permission = ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
 
-        if (permission != PackageManager.PERMISSION_GRANTED) {
+        if (permission != PackageManager.PERMISSION_GRANTED || true) {
             // We don't have permission so prompt the user
             ActivityCompat.requestPermissions(
                     activity,
-                    PERMISSIONS_STORAGE,
+                    APP_PERMISSIONS,
                     REQUEST_EXTERNAL_STORAGE
             );
         }
@@ -205,6 +225,7 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
             case R.id.action_mqtt_connect: connectToMQTT(); break;
             case R.id.action_mqtt_disconnect: disconnectFromMQTT(); break;
             case R.id.action_take_photo: takePhoto(); break;
+            case R.id.action_send_location: sendCurrentLocation(); break;
             default: super.onOptionsItemSelected(item);
         }
 
@@ -216,6 +237,8 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
         if(mClient != null){
             mClient.close();
             mClient = null;
+            mIsMQTTConnected = false;
+            invalidateOptionsMenu();
         }
     }
 
@@ -224,7 +247,7 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
 
         String clientId = MqttClient.generateClientId();
          mClient = new MqttAndroidClient(this.getApplicationContext(),
-                 "tcp://" + MQTT_CLIENT + ":1883",
+                 "tcp://" + SERVER_HOST_NAME + ":1883",
                         clientId);
          mClient.setCallback(this);
 
@@ -266,6 +289,12 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
         mCameraPreview.setVisibility(View.INVISIBLE);
     }
 
+    @SuppressLint("MissingPermission")
+    private void sendCurrentLocation() {
+        mLastLocation = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        sendLocationInfo(mLastLocation);
+    }
+
     private void startRecordingAudio() {
 
 
@@ -300,8 +329,6 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
                     current.get(Calendar.MINUTE),
                     current.get(Calendar.SECOND));
 
-            Log.d(TAG, "New File Name: " + fileName);
-
             String fullFileName = String.format("%s%s", dir, fileName);
             Log.d(TAG, "Full File Name: " + fullFileName);
 
@@ -314,15 +341,9 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
                 e.printStackTrace();
             }
 
-            try {
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 100, bos);
-                //TODO: Upload to NuvIoT
-                byte[] bitmapdata = bos.toByteArray();
-                bos.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            UploadHelper uploader = new UploadHelper(mProgressBar, mProgressStatus, mDeviceId, SERVER_HOST_NAME, SERVER_HOST_PORT);
+            uploader.setMedia(fullFileName);
+            uploader.execute();
         }
     }
 
@@ -333,8 +354,12 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
             mClient.subscribe("incoming/dev001/+",0);
             invalidateOptionsMenu();
             mIsMQTTConnected = true;
+
+            if(mLastLocation != null) {
+                sendLocationInfo(mLastLocation);
+            }
         } catch (MqttException e) {
-            Log.d(TAG, "MQTT EXCPETION");
+            Log.d(TAG, "MQTT EXCEPTION");
             Log.d(TAG, e.getMessage());
             e.printStackTrace();
         }
@@ -375,6 +400,8 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
         Log.d(TAG, "Delivery complete");
     }
 
+    Calendar lastMotion = null;
+
     @Override
     public void onSensorChanged(SensorEvent event) {
         deltaX = Math.abs(lastX - event.values[0]);
@@ -386,9 +413,21 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
         lastZ = event.values[2];
 
         if(mClient != null && mIsMQTTConnected) {
-            if (deltaX > 0.1 || deltaY > 0.1 || deltaZ > 0.1) {
+            if (deltaX > 0.1 || deltaY > 0.1 || deltaZ > 0.1)
+            {
+                if(lastMotion != null)
+                {
+                    if((Calendar.getInstance().getTime().getTime() - lastMotion.getTime().getTime()) / 1000 < MOTION_INTERVAL)
+                    {
+                        return;
+                    }
+                }
+
+                lastMotion = Calendar.getInstance();
+
+
                 try {
-                    mClient.publish("plugs/dev001/vibration", "{vibration:true}".getBytes(), 0, false);
+                    mClient.publish(String.format("plugs/%s/vibration", mDeviceId), "{vibration:true}".getBytes(), 0, false);
                 } catch (MqttException e) {
                     e.printStackTrace();
                 }
@@ -400,6 +439,39 @@ public class MainActivity extends AppCompatActivity implements  IMqttActionListe
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+    }
+
+    private void sendLocationInfo(Location location) {
+        if(mClient != null && mIsMQTTConnected) {
+            try {
+                String locationUpdate = String.format("{'lat':%.7f, 'lon':%.7f}", location.getLatitude(), location.getLongitude());
+                Log.d(TAG, locationUpdate);
+
+                mClient.publish(String.format("plugs/%s/location", mDeviceId), locationUpdate.getBytes(), 0, false);
+            } catch (MqttException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        sendLocationInfo(location);
+    }
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+
+    }
+
+    @Override
+    public void onProviderEnabled(String provider) {
+
+    }
+
+    @Override
+    public void onProviderDisabled(String provider) {
 
     }
 }

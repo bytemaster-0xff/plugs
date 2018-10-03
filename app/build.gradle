@@ -22,18 +22,20 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    packagingOptions {
+        exclude 'META-INF/DEPENDENCIES'
+    }
 }
 
 dependencies {
     implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.1.1'
     implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
+    implementation 'org.apache.httpcomponents:httpcore:4.4.10'
+    implementation 'org.apache.httpcomponents:httpmime:4.5.6'
+    implementation 'org.apache.commons:commons-io:1.3.2'
+
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(":deviceServices")
-//    implementation ('org.eclipse.paho:org.eclipse.paho.android.service:1.0.1') {
-  //      exclude group: 'com.android.support'
-    //    exclude module: 'appcompat-v7'
-     //   exclude module: 'support-v4'
-    //}
     implementation 'com.android.support:appcompat-v7:28.0.0'
     implementation 'com.android.support.constraint:constraint-layout:1.1.3'
     implementation 'com.android.support:design:28.0.0'

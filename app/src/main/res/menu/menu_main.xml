@@ -27,4 +27,9 @@
         android:orderInCategory="100"
         android:title="@string/action_camera_stop"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/action_send_location"
+        android:orderInCategory="100"
+        android:title="@string/action_send_location"
+        app:showAsAction="never" />
 </menu>
