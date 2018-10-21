@@ -9,13 +9,12 @@
     tools:context=".MainActivity"
     tools:showIn="@layout/activity_main">
 
-
     <TableLayout
         android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:padding="20dp"
         android:orientation="vertical"
-        android:layout_weight="0.5">
+        android:layout_weight="0.6">
 
         <TableRow android:layout_marginBottom="10dp">
             <View
@@ -53,7 +52,23 @@
 
         <TableRow android:layout_marginBottom="10dp">
             <View
-                android:background="#C0C0C0"
+                android:background="#CCCCCC"
+                android:layout_width="30dp"
+                android:id="@+id/externalSensorStatus"
+                android:layout_height="30dp">
+            </View>
+
+            <TextView android:textSize="24dp"
+                android:paddingLeft="10dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?android:attr/textAppearanceMedium"
+                android:text="External Sensor Heartbeat"/>
+        </TableRow>
+
+        <TableRow android:layout_marginBottom="10dp">
+            <View
+                android:background="#CCCCCC"
                 android:layout_width="30dp"
                 android:id="@+id/vibrationStatusDisplay"
                 android:layout_height="30dp">
@@ -70,7 +85,7 @@
 
         <TableRow android:layout_marginBottom="10dp">
             <View
-                android:background="#C0C0C0"
+                android:background="#CCCCCC"
                 android:layout_width="30dp"
                 android:id="@+id/videoMotionStatusDisplay"
                 android:layout_height="30dp">
@@ -84,12 +99,44 @@
                 android:text="Motion Detected on Camera"
                 android:id="@+id/videoMotionstatus" />
         </TableRow>
+
+        <TableRow android:layout_marginBottom="10dp">
+            <View
+                android:background="#CCCCCC"
+                android:layout_width="30dp"
+                android:id="@+id/externalSensorMotionStatus"
+                android:layout_height="30dp">
+            </View>
+
+            <TextView android:textSize="24dp"
+                android:paddingLeft="10dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?android:attr/textAppearanceMedium"
+                android:text="External Motion Detector" />
+        </TableRow>
+
+        <TableRow android:layout_marginBottom="10dp">
+            <View
+                android:background="#CCCCCC"
+                android:layout_width="30dp"
+                android:id="@+id/audioSensorStatus"
+                android:layout_height="30dp">
+            </View>
+
+            <TextView android:textSize="24dp"
+                android:paddingLeft="10dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?android:attr/textAppearanceMedium"
+                android:text="Audio Status" />
+        </TableRow>
     </TableLayout>
 
     <SurfaceView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="0.5"
+        android:layout_weight="0.4"
         android:visibility="gone"
         android:id="@+id/cameraPreview" />
 

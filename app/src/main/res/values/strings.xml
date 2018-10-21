@@ -5,6 +5,7 @@
     <string name="action_camera_start">Camera Start</string>
     <string name="action_camera_stop">Camera Stop</string>
     <string name="action_take_photo">Take Photo</string>
+    <string name="connect_to_sensor">Connect to Sensor</string>
     <string name="action_send_location">Send Location</string>
     <string name="action_settings">Settings</string>
 </resources>
