@@ -9,6 +9,8 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -68,33 +70,25 @@ public class MainActivity extends AppCompatActivity
 
     MqttAndroidClient mClient;
 
+    private CameraHelper mCamera;
+
     private float lastX, lastY, lastZ;
+
+    private SurfaceView mCameraPreview;
+    private View mMQTTConnectionStatus;
+    private View mLocationStatus;
+    private View mVibrationDetected;
+    private View mVideoMotionDected;
+    private TextView mLocationInfo;
 
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
-    private float mVibrateThreshold = 0;
-    public Vibrator mVibrator;
-
-    SurfaceView mCameraPreview;
 
     public final static String TAG = "PLUGSAPP";
 
     String mServerHostName;
 
     final int SERVER_HOST_PORT = 8050;
-
-    private CameraHelper mCamera;
-
-    private float deltaXMax = 0;
-    private float deltaYMax = 0;
-    private float deltaZMax = 0;
-
-    private float deltaX = 0;
-    private float deltaY = 0;
-    private float deltaZ = 0;
-
-    int TAKE_PHOTO_CODE = 0;
-    public static int count = 110;
 
     private static final long MIN_DISTANCE_CHANGE_FOR_UPDATES = 10; // 10 meters
 
@@ -106,9 +100,6 @@ public class MainActivity extends AppCompatActivity
     private Location mLastLocation;
     private LocationManager mLocationManager;
     private String mDeviceId;
-
-    ProgressBar mProgressBar;
-    TextView mProgressStatus;
 
     @SuppressLint("MissingPermission")
     @Override
@@ -122,79 +113,98 @@ public class MainActivity extends AppCompatActivity
         mServerHostName = prefs.getString(SERVER_KEY, "");
         mDeviceId = prefs.getString(DEVICE_ID_KEY, "");
 
-        verifyAppPermissions(this);
-
         mCameraPreview = findViewById(R.id.cameraPreview);
+        mVideoMotionDected = findViewById(R.id.videoMotionStatusDisplay);
+        mVibrationDetected = findViewById(R.id.vibrationStatusDisplay);
+        mMQTTConnectionStatus = findViewById(R.id.mqttConnectionStatus);
+        mLocationStatus = findViewById(R.id.locationStatusDisplay);
+        mLocationInfo = findViewById(R.id.locationStatus);
 
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
+        verifyAppPermissions();
 
-        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        if (mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
-            mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-            mVibrateThreshold = mAccelerometer.getMaximumRange() / 2;
+        initAccelerometer();
 
-        } else {
-            Log.d(TAG, "Sorry, no accelerator");
+        if (mHasGPSPermissions) {
+            initGPS();
         }
-
-        mLocationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
-                MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
-
-        mLastLocation = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        sendLocationInfo(mLastLocation);
-
-        mProgressBar = findViewById(R.id.uploadProgress);
-        mProgressStatus = findViewById(R.id.uploadStatus);
-        mProgressBar.setVisibility(View.GONE);
-        mVibrator = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
-        Log.d(TAG, "App Startup");
     }
+
 
     boolean mHasStoragePermissions = false;
     boolean mHasGPSPermissions = false;
     boolean mHasCemeraPermissions = false;
 
-    private static final int REQUEST_EXTERNAL_STORAGE = 1;
+    private static final int REQUEST_PERMISSIONS = 1;
     private static String[] APP_PERMISSIONS = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.CAMERA,
     };
 
-    /**
-     * Checks if the app has permission to write to device storage
-     *
-     * If the app does not has permission then the user will be prompted to grant permissions
-     *
-     * @param activity
-     */
-    public void verifyAppPermissions(Activity activity) {
-        // Check if we have write permission
-        int permission = ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
 
-        if (permission != PackageManager.PERMISSION_GRANTED || true) {
+    @SuppressLint("MissingPermission")
+    private void initGPS() {
+        mLocationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
+                MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
+        mLastLocation = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        setCurrentLocation(mLastLocation);
+    }
+
+    private void initAccelerometer() {
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
+            mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        } else {
+            Log.d(TAG, "Sorry, no accelerator");
+        }
+    }
+
+    public void verifyAppPermissions() {
+        // Check if we have write permission
+        mHasStoragePermissions = ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        mHasGPSPermissions = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        mHasCemeraPermissions = ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+
+        if (!mHasStoragePermissions || !mHasGPSPermissions || !mHasCemeraPermissions) {
             // We don't have permission so prompt the user
             ActivityCompat.requestPermissions(
-                    activity,
+                    this,
                     APP_PERMISSIONS,
-                    REQUEST_EXTERNAL_STORAGE
+                    REQUEST_PERMISSIONS
             );
         }
-        else
-        {
-            mHasStoragePermissions = true;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_PERMISSIONS: {
+                for(int idx = 0; idx < permissions.length; ++idx) {
+                    //YUCK THERE HAS TO BE A BETTER WAY!
+                    if(permissions[idx].contentEquals(Manifest.permission.READ_EXTERNAL_STORAGE) &&
+                            grantResults[idx] == PackageManager.PERMISSION_GRANTED) {
+                        mHasStoragePermissions = true;
+                    }
+
+                    if(permissions[idx].contentEquals(Manifest.permission.ACCESS_FINE_LOCATION) &&
+                            grantResults[idx] == PackageManager.PERMISSION_GRANTED) {
+                        mHasGPSPermissions = true;
+                    }
+
+                    if(permissions[idx].contentEquals(Manifest.permission.CAMERA) &&
+                            grantResults[idx] == PackageManager.PERMISSION_GRANTED) {
+                        mHasCemeraPermissions = true;
+                    }
+                }
+
+                if(mHasGPSPermissions && mLocationManager == null) {
+                    initGPS();
+                }
+            }
         }
     }
 
@@ -248,6 +258,7 @@ public class MainActivity extends AppCompatActivity
             mClient.close();
             mClient = null;
             mIsMQTTConnected = false;
+            mMQTTConnectionStatus.setBackgroundColor(Color.GREEN);
             invalidateOptionsMenu();
         }
     }
@@ -279,13 +290,18 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void startCamera() {
-        if(mCamera == null) {
-            mCamera = new CameraHelper(this, mCameraPreview);
-            mCamera.open();
-            mCameraPreview.setVisibility(View.VISIBLE);
-            mIsCameraActive = true;
-            invalidateOptionsMenu();
-         }
+        if(mHasCemeraPermissions) {
+            if (mCamera == null) {
+                mCamera = new CameraHelper(this, mCameraPreview);
+                mCamera.open();
+                mCameraPreview.setVisibility(View.VISIBLE);
+                mIsCameraActive = true;
+                invalidateOptionsMenu();
+            }
+        }
+        else {
+            verifyAppPermissions();
+        }
     }
 
     private void stopCamera() {
@@ -306,6 +322,8 @@ public class MainActivity extends AppCompatActivity
             sendLocationInfo(mLastLocation);
         }
         else {
+            mLocationStatus.setBackgroundColor(Color.RED);
+            mLocationInfo.setText("Location unavailable");
             Toast.makeText(this, "Sorry location information is not available", Toast.LENGTH_SHORT);
         }
     }
@@ -344,19 +362,13 @@ public class MainActivity extends AppCompatActivity
         dlgBldr.show();
     }
 
-    private void startRecordingAudio() {
-
-
-    }
-
-    private void stopRecordingAudio() {
-
-    }
-
     @SuppressLint("NewApi")
     private void takePhoto() {
         if(mCameraPreview.getVisibility() == View.VISIBLE &&
                 mCamera != null && mIsCameraActive) {
+
+            Toast.makeText(MainActivity.this, "Taking and uploading photo", Toast.LENGTH_LONG).show();
+
             Bitmap original = mCamera.getCurrentBitmap();
             Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, 480, 640, false);
             final String dir = Environment.getExternalStorageDirectory() + "/AppPicFolder/";
@@ -391,9 +403,12 @@ public class MainActivity extends AppCompatActivity
                 e.printStackTrace();
             }
 
-            UploadHelper uploader = new UploadHelper(mProgressBar, mProgressStatus, mDeviceId, mServerHostName, SERVER_HOST_PORT);
+            UploadHelper uploader = new UploadHelper(mDeviceId, mServerHostName, SERVER_HOST_PORT);
             uploader.setMedia(fullFileName);
             uploader.execute();
+        }
+        else {
+            Toast.makeText(MainActivity.this, "Camera not ready.", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -404,6 +419,11 @@ public class MainActivity extends AppCompatActivity
             mClient.subscribe("incoming/dev001/+",0);
             invalidateOptionsMenu();
             mIsMQTTConnected = true;
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() { mMQTTConnectionStatus.setBackgroundColor(Color.GREEN); }
+            });
 
             if(mLastLocation != null) {
                 sendLocationInfo(mLastLocation);
@@ -425,7 +445,8 @@ public class MainActivity extends AppCompatActivity
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Toast.makeText(MainActivity.this, "Could not connect to MQTT Server - " + exception.getCause().getMessage(), Toast.LENGTH_LONG).show();
+            mMQTTConnectionStatus.setBackgroundColor(Color.RED);
+            Toast.makeText(MainActivity.this, "Could not connect to MQTT Server - " + exception.getCause().getMessage(), Toast.LENGTH_LONG).show();
             }
         });
 
@@ -461,37 +482,51 @@ public class MainActivity extends AppCompatActivity
 
     Calendar lastMotion = null;
 
+    Handler resetVibrationHandler = new Handler();
+    private Runnable resetVibration = new Runnable() {
+        @Override
+        public void run() {
+            mVibrationDetected.setBackgroundColor(Color.LTGRAY);
+        }
+    };
+
+
     @Override
     public void onSensorChanged(SensorEvent event) {
-        deltaX = Math.abs(lastX - event.values[0]);
-        deltaY = Math.abs(lastY - event.values[1]);
-        deltaZ = Math.abs(lastZ - event.values[2]);
+        float deltaX = Math.abs(lastX - event.values[0]);
+        float deltaY = Math.abs(lastY - event.values[1]);
+        float deltaZ = Math.abs(lastZ - event.values[2]);
 
         lastX = event.values[0];
         lastY = event.values[1];
         lastZ = event.values[2];
 
-        if(mClient != null && mIsMQTTConnected) {
-            if (deltaX > 0.1 || deltaY > 0.1 || deltaZ > 0.1)
-            {
-                if(lastMotion != null)
-                {
-                    if((Calendar.getInstance().getTime().getTime() - lastMotion.getTime().getTime()) / 1000 < MOTION_INTERVAL)
-                    {
-                        return;
-                    }
+
+        if (deltaX > 0.1 || deltaY > 0.1 || deltaZ > 0.1) {
+            if (lastMotion != null) {
+                if ((Calendar.getInstance().getTime().getTime() - lastMotion.getTime().getTime()) / 1000 < MOTION_INTERVAL) {
+                    return;
                 }
+            }
 
-                lastMotion = Calendar.getInstance();
+            Log.d(TAG, "Motion Detected:" + deltaX + ":" + deltaY + ":" + deltaZ);
 
+            lastMotion = Calendar.getInstance();
+            if (mIsMQTTConnected) {
                 try {
                     mClient.publish(String.format("plugs/%s/vibration", mDeviceId), "{vibration:true}".getBytes(), 0, false);
                 } catch (MqttException e) {
                     e.printStackTrace();
                 }
-
-                Log.d(TAG, "Motion Detected:" + deltaX + ":" + deltaY + ":" + deltaZ);
             }
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mVibrationDetected.setBackgroundColor(Color.GREEN);
+                    resetVibrationHandler.postDelayed(resetVibration, 5000);
+                }
+            });
         }
     }
 
@@ -500,7 +535,6 @@ public class MainActivity extends AppCompatActivity
             try {
                 String locationUpdate = String.format("{'lat':%.7f, 'lon':%.7f}", location.getLatitude(), location.getLongitude());
                 Log.d(TAG, locationUpdate);
-
                 mClient.publish(String.format("plugs/%s/location", mDeviceId), locationUpdate.getBytes(), 0, false);
             } catch (MqttException e) {
                 e.printStackTrace();
@@ -508,7 +542,17 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    @Override public void onLocationChanged(Location location) {
+    public void setCurrentLocation(Location location) {
+        mLastLocation = location;
+        mLocationStatus.setBackgroundColor(Color.GREEN);
+        String locationUpdate = String.format("Lat: %.4f, Lon: %.4f", mLastLocation.getLatitude(),location.getLongitude());
+        mLocationInfo.setText(locationUpdate);
+    }
+
+
+    @Override
+    public void onLocationChanged(Location location) {
+        setCurrentLocation(location);
         sendLocationInfo(location);
     }
     @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
@@ -516,12 +560,31 @@ public class MainActivity extends AppCompatActivity
     @Override public void onProviderDisabled(String provider) { }
     @Override public void onAccuracyChanged(Sensor sensor, int accuracy) { }
 
+    Handler resetVideoMotionHandler = new Handler();
+    private Runnable resetVideoMotion = new Runnable() {
+        @Override
+        public void run() {
+            mVideoMotionDected.setBackgroundColor(Color.LTGRAY);
+        }
+    };
+
     @Override
     public void onMotionDetected() {
         try {
-            mClient.publish(String.format("plugs/%s/videomotion", mDeviceId), "{videoMotion:true}".getBytes(), 0, false);
+            if(mIsMQTTConnected) {
+                mClient.publish(String.format("plugs/%s/videomotion", mDeviceId), "{videoMotion:true}".getBytes(), 0, false);
+            }
+
         } catch (MqttException e) {
             e.printStackTrace();
         }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mVideoMotionDected.setBackgroundColor(Color.GREEN);
+            }});
+
+        resetVideoMotionHandler.postDelayed(resetVideoMotion, 3000);
     }
 }

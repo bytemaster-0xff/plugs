@@ -27,8 +27,6 @@ import java.io.IOException;
 
 
 public class UploadHelper extends AsyncTask<Void, Integer, String> {
-    private ProgressBar mProgressBar;
-    private TextView mProgressPercent;
     private String mDeviceId;
     private String mServerUrl;
     String mMediaFile;
@@ -38,10 +36,8 @@ public class UploadHelper extends AsyncTask<Void, Integer, String> {
 
 
 
-    public UploadHelper(ProgressBar progressBar, TextView progressPercent, String deviceId,
+    public UploadHelper(String deviceId,
                         String serverUrl, int serverPort){
-        mProgressBar = progressBar;
-        mProgressPercent = progressPercent;
         mServerUrl = serverUrl;
         mServerPort = serverPort;
         mDeviceId = deviceId;
@@ -55,20 +51,11 @@ public class UploadHelper extends AsyncTask<Void, Integer, String> {
     @Override
     protected void onPreExecute() {
         // setting progress bar to zero
-        mProgressBar.setProgress(0);
         super.onPreExecute();
     }
 
     @Override
-    protected void onProgressUpdate(Integer... progress) {
-        // Making progress bar visible
-        mProgressBar.setVisibility(View.VISIBLE);
-
-        // updating progress bar value
-        mProgressBar.setProgress(progress[0]);
-
-        // updating percentage value
-        mProgressPercent .setText(String.valueOf(progress[0]) + "%");
+    protected void onProgressUpdate(Integer... progress) {// Making progress bar visible
     }
 
     @Override
