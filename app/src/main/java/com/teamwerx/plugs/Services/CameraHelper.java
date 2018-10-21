@@ -176,17 +176,7 @@ public class CameraHelper {
         // 出力ストリームのサイズ取得
         Size outputStreamSize = new Size( mTextureView.getWidth(), mTextureView.getHeight() );
         Log.d( "CameraCharacteristics", "出力ストリーム : " + outputStreamSize.getWidth() + ", " + outputStreamSize.getHeight() );
-        //
-        // 縦方向を切り取る場合（出力アスペクト比 > 切り取り領域のアスペクト比）
-        // 横方向を切り取る場合（出力アスペクト比 < 切り取り領域のアスペクト比）
 
-
-        /*
-         * 【FOVを求める式】　angle = 2 * arctan( d / (2 * f) )
-         * f = 焦点距離， d = 縦または横のセンサ物理サイズ
-         */
-        // 実際に画面に表示している領域と取得したセンサ全体の物理サイズは異なる
-        // その辺の計算がよくわからないので全体で考えます
         float[] angle = new float[2];
         angle[0] = 2f * (float)Math.toDegrees( Math.atan( physicalSize.getWidth()  / ( 2 * focalLength[0] ) ) ); // 横
         angle[1] = 2f * (float)Math.toDegrees( Math.atan( physicalSize.getHeight() / ( 2 * focalLength[0] ) ) ); // 縦

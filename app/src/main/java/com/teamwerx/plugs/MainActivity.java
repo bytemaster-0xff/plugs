@@ -3,7 +3,10 @@ package com.teamwerx.plugs;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.hardware.Sensor;
@@ -15,27 +18,31 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Vibrator;
-import android.provider.SyncStateContract;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.TextureView;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.teamwerx.plugs.Services.CameraHelper;
 import com.teamwerx.plugs.Services.UploadHelper;
-
-import org.apache.http.entity.mime.HttpMultipartMode;
-import org.apache.http.entity.mime.MultipartEntity;
+import com.teamwerx.plugs.data.Preferences;
+import com.teamwerx.plugs.image.ImageProcessing;
+import com.teamwerx.plugs.motion_detection.IMotionDetection;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
@@ -47,12 +54,11 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Calendar;
-import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends AppCompatActivity implements IMqttActionListener, MqttCallback,
         SensorEventListener, LocationListener {
@@ -61,17 +67,23 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
     private float lastX, lastY, lastZ;
 
+    private static long mReferenceTime = 0;
+
+    private static volatile AtomicBoolean mProcessing = new AtomicBoolean(false);
+
+    private static IMotionDetection mMotionDetector = null;
+
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
     private float mVibrateThreshold = 0;
     public Vibrator mVibrator;
 
     TextureView mCameraPreview;
-
-    //final String SERVER_HOST_NAME = "10.1.1.28";
+    ImageView mSurfaceView;
 
     public final static String TAG = "PLUGSAPP";
-    final String SERVER_HOST_NAME = "plugshudson.sofwerx.iothost.net";
+
+    String mServerHostName;
 
     final int SERVER_HOST_PORT = 8050;
 
@@ -110,11 +122,14 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        mDeviceId = "dev001";
+        SharedPreferences prefs = this.getPreferences(Context.MODE_PRIVATE);
+        mServerHostName = prefs.getString(SERVER_KEY, "");
+        mDeviceId = prefs.getString(DEVICE_ID_KEY, "");
 
         verifyAppPermissions(this);
 
         mCameraPreview = findViewById(R.id.cameraPreview);
+        mSurfaceView = findViewById(R.id.motionDetectorPreview);
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
@@ -127,8 +142,6 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
-            // success! we have an accelerometer
-
             mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
             mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
             mVibrateThreshold = mAccelerometer.getMaximumRange() / 2;
@@ -146,7 +159,7 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
         mProgressBar = findViewById(R.id.uploadProgress);
         mProgressStatus = findViewById(R.id.uploadStatus);
-
+        mProgressBar.setVisibility(View.GONE);
         mVibrator = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
         Log.d(TAG, "App Startup");
     }
@@ -195,11 +208,17 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
     @Override
     public boolean onPrepareOptionsMenu (Menu menu) {
-        menu.findItem(R.id.action_mqtt_connect).setEnabled(!mIsMQTTConnected);
-        menu.findItem(R.id.action_mqtt_disconnect).setEnabled(mIsMQTTConnected);
+        boolean settingsReady = mServerHostName != null &&
+                                mServerHostName.length() > 0 &&
+                                mDeviceId != null &&
+                                mDeviceId.length() > 0;
+
+        menu.findItem(R.id.action_mqtt_connect).setEnabled(!mIsMQTTConnected && settingsReady);
+        menu.findItem(R.id.action_mqtt_disconnect).setEnabled(mIsMQTTConnected && settingsReady);
         menu.findItem(R.id.action_camera_start).setEnabled(!mIsCameraActive);
         menu.findItem(R.id.action_camera_stop).setEnabled(mIsCameraActive);
-        menu.findItem(R.id.action_take_photo).setEnabled(mIsCameraActive);
+        menu.findItem(R.id.action_take_photo).setEnabled(mIsCameraActive && settingsReady);
+        menu.findItem(R.id.action_send_location).setEnabled(mIsMQTTConnected && settingsReady);
         return true;
     }
 
@@ -226,6 +245,7 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             case R.id.action_mqtt_disconnect: disconnectFromMQTT(); break;
             case R.id.action_take_photo: takePhoto(); break;
             case R.id.action_send_location: sendCurrentLocation(); break;
+            case R.id.action_settings: showSettingsDialog(); break;
             default: super.onOptionsItemSelected(item);
         }
 
@@ -247,7 +267,7 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
         String clientId = MqttClient.generateClientId();
          mClient = new MqttAndroidClient(this.getApplicationContext(),
-                 "tcp://" + SERVER_HOST_NAME + ":1883",
+                 "tcp://" + mServerHostName + ":1883",
                         clientId);
          mClient.setCallback(this);
 
@@ -275,6 +295,8 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             mCameraPreview.setVisibility(View.VISIBLE);
             mIsCameraActive = true;
             invalidateOptionsMenu();
+
+            motionDetectorHandler.postDelayed(motionDetector, 500);
         }
     }
 
@@ -292,7 +314,46 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
     @SuppressLint("MissingPermission")
     private void sendCurrentLocation() {
         mLastLocation = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        sendLocationInfo(mLastLocation);
+        if(mLastLocation != null) {
+            sendLocationInfo(mLastLocation);
+        }
+        else {
+            Toast.makeText(this, "Sorry location information is not available", Toast.LENGTH_SHORT);
+        }
+    }
+
+    final String SERVER_KEY = "SERVER_SETTING";
+    final String DEVICE_ID_KEY = "DEVICE_ID_SETTING";
+
+    private void showSettingsDialog() {
+        LayoutInflater inflater = this.getLayoutInflater();
+
+        View content = inflater.inflate(R.layout.settings_dlg_view, null);
+
+        final SharedPreferences prefs = this.getPreferences(Context.MODE_PRIVATE);
+
+        final EditText srvr = content.findViewById(R.id.settings_server);
+        final EditText deviceId = content.findViewById(R.id.settings_device_id);
+        srvr.setText(mServerHostName);
+        deviceId.setText(mDeviceId);;
+        AlertDialog.Builder dlgBldr = new AlertDialog.Builder(this);
+        dlgBldr.setTitle(R.string.app_name);
+        dlgBldr.setView(content);
+
+        dlgBldr.setPositiveButton(android.R.string.ok,
+            new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dlg, int which){
+                mServerHostName = srvr.getText().toString();
+                mDeviceId = deviceId.getText().toString();
+
+                prefs.edit().putString(SERVER_KEY, mServerHostName).commit();
+                prefs.edit().putString(DEVICE_ID_KEY, mDeviceId).commit();
+                invalidateOptionsMenu();
+            }
+        });
+
+        dlgBldr.show();
     }
 
     private void startRecordingAudio() {
@@ -341,7 +402,7 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
                 e.printStackTrace();
             }
 
-            UploadHelper uploader = new UploadHelper(mProgressBar, mProgressStatus, mDeviceId, SERVER_HOST_NAME, SERVER_HOST_PORT);
+            UploadHelper uploader = new UploadHelper(mProgressBar, mProgressStatus, mDeviceId, mServerHostName, SERVER_HOST_PORT);
             uploader.setMedia(fullFileName);
             uploader.execute();
         }
@@ -371,6 +432,10 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
         Log.d(TAG, "onFailure");
         Log.d(TAG, exception.getCause().getMessage());
         Log.d(TAG, "onFailure");
+
+        Toast.makeText(this, "Could not connect to MQTT Server", Toast.LENGTH_SHORT);
+        Toast.makeText(this, exception.getCause().getMessage(), Toast.LENGTH_LONG);
+        invalidateOptionsMenu();
     }
 
     @Override
@@ -474,4 +539,92 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
     public void onProviderDisabled(String provider) {
 
     }
+
+    Handler motionDetectorHandler = new Handler();
+
+
+    private static final class DetectionThread extends Thread {
+
+        private byte[] data;
+        private int width;
+        private int height;
+
+        public DetectionThread(byte[] data, int width, int height) {
+            this.data = data;
+            this.width = width;
+            this.height = height;
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        public void run() {
+            if (!mProcessing.compareAndSet(false, true)) return;
+
+            // Log.d(TAG, "BEGIN PROCESSING...");
+            try {
+                // Previous frame
+                int[] pre = null;
+                if (Preferences.SAVE_PREVIOUS) pre = mMotionDetector.getPrevious();
+
+                // Current frame (with changes)
+                // long bConversion = System.currentTimeMillis();
+                int[] img = null;
+                if (Preferences.USE_RGB) {
+                    img = ImageProcessing.decodeYUV420SPtoRGB(data, width, height);
+                } else {
+                    img = ImageProcessing.decodeYUV420SPtoLuma(data, width, height);
+                }
+                // long aConversion = System.currentTimeMillis();
+                // Log.d(TAG, "Converstion="+(aConversion-bConversion));
+
+                // Current frame (without changes)
+                int[] org = null;
+                if (Preferences.SAVE_ORIGINAL && img != null) org = img.clone();
+
+                if (img != null && mMotionDetector.detect(img, width, height)) {
+                    // The delay is necessary to avoid taking a picture while in
+                    // the
+                    // middle of taking another. This problem can causes some
+                    // phones
+                    // to reboot.
+                    long now = System.currentTimeMillis();
+                    if (now > (mReferenceTime + Preferences.PICTURE_DELAY)) {
+                        mReferenceTime = now;
+
+                        Bitmap previous = null;
+                        if (Preferences.SAVE_PREVIOUS && pre != null) {
+                            if (Preferences.USE_RGB) previous = ImageProcessing.rgbToBitmap(pre, width, height);
+                            else previous = ImageProcessing.lumaToGreyscale(pre, width, height);
+                        }
+
+                        Bitmap original = null;
+                        if (Preferences.SAVE_ORIGINAL && org != null) {
+                            if (Preferences.USE_RGB) original = ImageProcessing.rgbToBitmap(org, width, height);
+                            else original = ImageProcessing.lumaToGreyscale(org, width, height);
+                        }
+
+                        Bitmap bitmap = null;
+                        if (Preferences.SAVE_CHANGES) {
+                            if (Preferences.USE_RGB) bitmap = ImageProcessing.rgbToBitmap(img, width, height);
+                            else bitmap = ImageProcessing.lumaToGreyscale(img, width, height);
+                        }
+
+                        Log.i(TAG, "Saving.. previous=" + previous + " original=" + original + " bitmap=" + bitmap);
+                        Looper.prepare();
+                    } else {
+                        Log.i(TAG, "Not taking picture because not enough time has passed since the creation of the Surface");
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                mProcessing.set(false);
+            }
+            // Log.d(TAG, "END PROCESSING...");
+
+            mProcessing.set(false);
+        }
+    };
 }
