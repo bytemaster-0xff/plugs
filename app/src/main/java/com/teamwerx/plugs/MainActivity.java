@@ -76,7 +76,6 @@ public class MainActivity extends AppCompatActivity
     public Vibrator mVibrator;
 
     SurfaceView mCameraPreview;
-    ImageView mSurfaceView;
 
     public final static String TAG = "PLUGSAPP";
 
@@ -126,7 +125,6 @@ public class MainActivity extends AppCompatActivity
         verifyAppPermissions(this);
 
         mCameraPreview = findViewById(R.id.cameraPreview);
-        mSurfaceView = findViewById(R.id.motionDetectorPreview);
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
@@ -355,6 +353,7 @@ public class MainActivity extends AppCompatActivity
 
     }
 
+    @SuppressLint("NewApi")
     private void takePhoto() {
         if(mCameraPreview.getVisibility() == View.VISIBLE &&
                 mCamera != null && mIsCameraActive) {
@@ -417,14 +416,19 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+    public void onFailure(IMqttToken asyncActionToken, final Throwable exception) {
         // Something went wrong e.g. connection timeout or firewall problems
         Log.d(TAG, "onFailure");
         Log.d(TAG, exception.getCause().getMessage());
         Log.d(TAG, "onFailure");
 
-        Toast.makeText(this, "Could not connect to MQTT Server", Toast.LENGTH_SHORT);
-        Toast.makeText(this, exception.getCause().getMessage(), Toast.LENGTH_LONG);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, "Could not connect to MQTT Server - " + exception.getCause().getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+
         invalidateOptionsMenu();
     }
 

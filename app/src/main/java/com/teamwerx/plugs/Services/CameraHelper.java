@@ -1,5 +1,6 @@
 package com.teamwerx.plugs.Services;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.hardware.Camera;
@@ -7,8 +8,10 @@ import android.hardware.Camera.PreviewCallback;
 import android.os.Looper;
 import android.util.Log;
 import android.util.Size;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.WindowManager;
 
 import com.teamwerx.plugs.MainActivity;
 import com.teamwerx.plugs.data.Preferences;
@@ -50,6 +53,10 @@ public class CameraHelper {
         } else {
             mMotionDetector = new AggregateLumaMotionDetection();
         }
+
+        mPreviewHolder = mTextureView.getHolder();
+        mPreviewHolder.addCallback(surfaceCallback);
+        mPreviewHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
     }
 
     private PreviewCallback previewCallback = new PreviewCallback() {
@@ -126,11 +133,8 @@ public class CameraHelper {
     }
 
     public void open() {
-        mPreviewHolder = mTextureView.getHolder();
-        mPreviewHolder.addCallback(surfaceCallback);
-        mPreviewHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
-
         mCamera = Camera.open();
+        mCamera.setDisplayOrientation(90);
     }
 
     public  void Pause() {
