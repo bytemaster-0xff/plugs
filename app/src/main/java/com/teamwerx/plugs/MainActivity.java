@@ -43,6 +43,7 @@ import com.teamwerx.plugs.Services.CameraHelper;
 import com.teamwerx.plugs.Services.UploadHelper;
 import com.teamwerx.plugs.data.Preferences;
 import com.teamwerx.plugs.image.ImageProcessing;
+import com.teamwerx.plugs.motion_detection.IMotionDetectedListener;
 import com.teamwerx.plugs.motion_detection.IMotionDetection;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
@@ -61,7 +62,8 @@ import java.io.IOException;
 import java.util.Calendar;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class MainActivity extends AppCompatActivity implements IMqttActionListener, MqttCallback,
+public class MainActivity extends AppCompatActivity
+        implements IMqttActionListener, MqttCallback, IMotionDetectedListener,
         SensorEventListener, LocationListener {
 
     MqttAndroidClient mClient;
@@ -226,12 +228,8 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
         switch(id)
         {
             case R.id.action_camera_start: startCamera(); break;
@@ -244,7 +242,6 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             default: super.onOptionsItemSelected(item);
         }
 
-        // If the default case was not executed (i.e. menu was handled, return true)
         return true;
     }
 
@@ -483,7 +480,6 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
                 lastMotion = Calendar.getInstance();
 
-
                 try {
                     mClient.publish(String.format("plugs/%s/vibration", mDeviceId), "{vibration:true}".getBytes(), 0, false);
                 } catch (MqttException e) {
@@ -493,11 +489,6 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
                 Log.d(TAG, "Motion Detected:" + deltaX + ":" + deltaY + ":" + deltaZ);
             }
         }
-    }
-
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {
-
     }
 
     private void sendLocationInfo(Location location) {
@@ -513,23 +504,20 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
         }
     }
 
-    @Override
-    public void onLocationChanged(Location location) {
+    @Override public void onLocationChanged(Location location) {
         sendLocationInfo(location);
     }
+    @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
+    @Override public void onProviderEnabled(String provider) { }
+    @Override public void onProviderDisabled(String provider) { }
+    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) { }
 
     @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
-
-    }
-
-    @Override
-    public void onProviderEnabled(String provider) {
-
-    }
-
-    @Override
-    public void onProviderDisabled(String provider) {
-
+    public void onMotionDetected() {
+        try {
+            mClient.publish(String.format("plugs/%s/videomotion", mDeviceId), "{videoMotion:true}".getBytes(), 0, false);
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
     }
 }

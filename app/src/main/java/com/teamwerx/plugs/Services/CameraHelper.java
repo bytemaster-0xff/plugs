@@ -14,6 +14,7 @@ import com.teamwerx.plugs.MainActivity;
 import com.teamwerx.plugs.data.Preferences;
 import com.teamwerx.plugs.image.ImageProcessing;
 import com.teamwerx.plugs.motion_detection.AggregateLumaMotionDetection;
+import com.teamwerx.plugs.motion_detection.IMotionDetectedListener;
 import com.teamwerx.plugs.motion_detection.IMotionDetection;
 import com.teamwerx.plugs.motion_detection.LumaMotionDetection;
 import com.teamwerx.plugs.motion_detection.RgbMotionDetection;
@@ -28,7 +29,6 @@ public class CameraHelper {
 
     private Size mCameraSize;
     private boolean mPreviewActive;
-    private Activity mActivity = null;
 
     private static long mReferenceTime = 0;
     private static volatile AtomicBoolean mProcessing = new AtomicBoolean(false);
@@ -36,9 +36,12 @@ public class CameraHelper {
 
     private static Bitmap mCurrentImage;
 
-    public CameraHelper(Activity activity, SurfaceView textureView) {
+    private static IMotionDetectedListener mMotionDetectedListener;
+
+    public CameraHelper(IMotionDetectedListener motionDetectedListener,  SurfaceView textureView) {
         mTextureView = textureView;
-        mActivity = activity;
+
+        mMotionDetectedListener = motionDetectedListener;
 
         if (Preferences.USE_RGB) {
             mMotionDetector = new RgbMotionDetection();
@@ -65,7 +68,6 @@ public class CameraHelper {
     };
 
     private SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {
-
         /**
          * {@inheritDoc}
          */
@@ -124,11 +126,11 @@ public class CameraHelper {
     }
 
     public void open() {
-        mCamera = Camera.open();
-
         mPreviewHolder = mTextureView.getHolder();
         mPreviewHolder.addCallback(surfaceCallback);
         mPreviewHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+
+        mCamera = Camera.open();
     }
 
     public  void Pause() {
@@ -241,10 +243,8 @@ public class CameraHelper {
                             }
                         }
 
-                        Log.i(MainActivity.TAG, "Saving.. previous=" + previous + " original=" + original + " bitmap=" + bitmap);
+                        mMotionDetectedListener.onMotionDetected();
                         Looper.prepare();
-                    } else {
-                        Log.i(MainActivity.TAG, "Not taking picture because not enough time has passed since the creation of the Surface");
                     }
                 }
             } catch (Exception e) {
