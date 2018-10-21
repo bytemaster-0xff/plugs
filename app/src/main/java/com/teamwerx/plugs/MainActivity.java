@@ -28,6 +28,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.View;
 import android.view.Menu;
@@ -67,18 +68,12 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
     private float lastX, lastY, lastZ;
 
-    private static long mReferenceTime = 0;
-
-    private static volatile AtomicBoolean mProcessing = new AtomicBoolean(false);
-
-    private static IMotionDetection mMotionDetector = null;
-
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
     private float mVibrateThreshold = 0;
     public Vibrator mVibrator;
 
-    TextureView mCameraPreview;
+    SurfaceView mCameraPreview;
     ImageView mSurfaceView;
 
     public final static String TAG = "PLUGSAPP";
@@ -295,9 +290,7 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             mCameraPreview.setVisibility(View.VISIBLE);
             mIsCameraActive = true;
             invalidateOptionsMenu();
-
-            motionDetectorHandler.postDelayed(motionDetector, 500);
-        }
+         }
     }
 
     private void stopCamera() {
@@ -368,7 +361,7 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
     private void takePhoto() {
         if(mCameraPreview.getVisibility() == View.VISIBLE &&
                 mCamera != null && mIsCameraActive) {
-            Bitmap original = mCameraPreview.getBitmap();
+            Bitmap original = mCamera.getCurrentBitmap();
             Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, 480, 640, false);
             final String dir = Environment.getExternalStorageDirectory() + "/AppPicFolder/";
             Log.d(TAG, dir);
@@ -539,92 +532,4 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
     public void onProviderDisabled(String provider) {
 
     }
-
-    Handler motionDetectorHandler = new Handler();
-
-
-    private static final class DetectionThread extends Thread {
-
-        private byte[] data;
-        private int width;
-        private int height;
-
-        public DetectionThread(byte[] data, int width, int height) {
-            this.data = data;
-            this.width = width;
-            this.height = height;
-        }
-
-        /**
-         * {@inheritDoc}
-         */
-        @Override
-        public void run() {
-            if (!mProcessing.compareAndSet(false, true)) return;
-
-            // Log.d(TAG, "BEGIN PROCESSING...");
-            try {
-                // Previous frame
-                int[] pre = null;
-                if (Preferences.SAVE_PREVIOUS) pre = mMotionDetector.getPrevious();
-
-                // Current frame (with changes)
-                // long bConversion = System.currentTimeMillis();
-                int[] img = null;
-                if (Preferences.USE_RGB) {
-                    img = ImageProcessing.decodeYUV420SPtoRGB(data, width, height);
-                } else {
-                    img = ImageProcessing.decodeYUV420SPtoLuma(data, width, height);
-                }
-                // long aConversion = System.currentTimeMillis();
-                // Log.d(TAG, "Converstion="+(aConversion-bConversion));
-
-                // Current frame (without changes)
-                int[] org = null;
-                if (Preferences.SAVE_ORIGINAL && img != null) org = img.clone();
-
-                if (img != null && mMotionDetector.detect(img, width, height)) {
-                    // The delay is necessary to avoid taking a picture while in
-                    // the
-                    // middle of taking another. This problem can causes some
-                    // phones
-                    // to reboot.
-                    long now = System.currentTimeMillis();
-                    if (now > (mReferenceTime + Preferences.PICTURE_DELAY)) {
-                        mReferenceTime = now;
-
-                        Bitmap previous = null;
-                        if (Preferences.SAVE_PREVIOUS && pre != null) {
-                            if (Preferences.USE_RGB) previous = ImageProcessing.rgbToBitmap(pre, width, height);
-                            else previous = ImageProcessing.lumaToGreyscale(pre, width, height);
-                        }
-
-                        Bitmap original = null;
-                        if (Preferences.SAVE_ORIGINAL && org != null) {
-                            if (Preferences.USE_RGB) original = ImageProcessing.rgbToBitmap(org, width, height);
-                            else original = ImageProcessing.lumaToGreyscale(org, width, height);
-                        }
-
-                        Bitmap bitmap = null;
-                        if (Preferences.SAVE_CHANGES) {
-                            if (Preferences.USE_RGB) bitmap = ImageProcessing.rgbToBitmap(img, width, height);
-                            else bitmap = ImageProcessing.lumaToGreyscale(img, width, height);
-                        }
-
-                        Log.i(TAG, "Saving.. previous=" + previous + " original=" + original + " bitmap=" + bitmap);
-                        Looper.prepare();
-                    } else {
-                        Log.i(TAG, "Not taking picture because not enough time has passed since the creation of the Surface");
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                mProcessing.set(false);
-            }
-            // Log.d(TAG, "END PROCESSING...");
-
-            mProcessing.set(false);
-        }
-    };
 }
