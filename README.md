@@ -26,3 +26,10 @@ The android application was created as a custom app, the back-end and management
 1. Ability to review all triggers for sensors
 1. Ability to review all media captured by phones
 1. Detect which phones are online/battery level
+
+## Possible next steps
+1. Create a local version of our cloud based run time to eliminate cloud requirement
+1. Capture audio/video rather than still photographs
+1. Integration with ATAK
+1. Create android application that would act as base station.
+1. Integration with Mobile (https://github.com/bytemaster-0xff/oshapp)[TEAMWERX Mobile Data Challenge App] and Geo Packages
