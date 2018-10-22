@@ -37,6 +37,7 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 1. Configuration motion detection thresholds
 1. Explore using "Android Things" as a platform
 1. Additioanl external sensor capabilities
+1. Extend capability of external sensor to allow for naming Bluetooth devices
 1. Integration with ATAK
 1. Current version requires app to be running and in the foreground, it should be possible to build this as a service.
 1. Create android application that would act as base station.
