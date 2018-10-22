@@ -2,7 +2,7 @@
 
 The PLUGS Mobile Application is an Android application written in Java with Android Studio. Currently we are targetting a minimum SDK version of 16 (Android 4.1). 
 
-_note:_ The current version has a number of settings and things you can enable/disalbe.  It would be expected that the version that is fielded would simply startup in the proper configuration
+_note:_ The current version has a number of settings and things you can enable/disable.  It would be expected that the version that is fielded would simply startup in the proper configuration
 
 ## Primary Features
 
