@@ -20,7 +20,7 @@ _note:_ The current version has a number of settings and things you can enable/d
 ### Settings
 
 ![Settings](./images/Settings.png)
-* Server Id - Connect to MQTT Server (Cloud for Phase I, potentially android phone for Phase II)
+* Server Id - Connect to MQTT Server (Cloud for Phase I, potentially android phone for Phase II).  Please use `plugshudson.sofwerx.iothost.net` for testing.
 * Configurable Device Id - Unique ID for this device, must be registered on the base station, it should be something like `dev002` containing only lower case letters and numbers.   This device also needs to be provisioned on the base station/server.
 * Configurable Target Device Ids - List of other Unique Device IDs that should be triggered to capture media.  They should be comma delimitted like `dev001,dev003`
 
