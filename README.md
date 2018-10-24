@@ -24,7 +24,6 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 ## Base Station Features
 1. Add new Android Devices
 1. Ability to add specificy device location
-1. Specify which phones should be triggerred to capture media when sensors are triggered
 1. Ability to review all triggers for sensors
 1. Ability to review all media captured by phones
 1. Detect which phones are online/battery level
