@@ -12,7 +12,7 @@
         android:id="@+id/settings_server"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="plugs.sofwerx.iothost.net"/>
+        android:hint="plugshudson.sofwerx.iothost.net"/>
 
     <TextView
         android:text="Device Id"
@@ -23,7 +23,7 @@
         android:id="@+id/settings_device_id"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="device001"/>
+        android:hint="dev001"/>
 
     <TextView
         android:text="Target Device Id"

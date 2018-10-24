@@ -110,6 +110,7 @@ public class MainActivity extends AppCompatActivity
     final int SERVER_HOST_PORT = 8050;
 
     private Handler resetVibrationHandler = new Handler();
+    private Handler mWipeHandler = new Handler();
     private Handler mExternalSensorHeartbeatTimeout = new Handler();
     private Handler mNoiseDetectionHandler = new Handler();
 
@@ -592,6 +593,9 @@ public class MainActivity extends AppCompatActivity
         if(topic.contains("startcamera")){
             startCamera();
         }
+        if(topic.contains("wipe")){
+            wipeDevice();
+        }
         else if(topic.contains("stopcamera")) {
             stopCamera();
         }
@@ -599,6 +603,30 @@ public class MainActivity extends AppCompatActivity
             takePhoto();
         }
     }
+
+    private void wipeDevice() {
+        final String dir = Environment.getExternalStorageDirectory() + "/AppPicFolder/";
+        Log.d(TAG, "Removing local picture directory: " + dir);
+
+        File newdir = new File(dir);
+        newdir.delete();
+
+        SharedPreferences prefs = this.getPreferences(Context.MODE_PRIVATE);
+        prefs.edit().putString(SERVER_KEY, "").commit();
+        prefs.edit().putString(DEVICE_ID_KEY, "").commit();
+        prefs.edit().putString(TARGET_DEVICES, "").commit();
+
+        mWipeHandler.postDelayed(wipeExit, 2000);
+
+        Toast.makeText(this, "Wiping device", Toast.LENGTH_LONG).show();
+    }
+
+    private Runnable wipeExit = new Runnable() {
+        @Override
+        public void run() {
+            MainActivity.this.finish();
+        }
+    };
 
     @Override
     public void deliveryComplete(IMqttDeliveryToken token){
@@ -874,11 +902,7 @@ public class MainActivity extends AppCompatActivity
                     }
                     break;
                 case Constants.MESSAGE_WRITE:
-                    byte[] writeBuf = (byte[]) msg.obj;
-                    // construct a string from the buffer
-                    String writeMessage = new String(writeBuf);
-//                    ChatMessage messageWrite = new ChatMessage("Me", writeMessage);
-  //                  activity.addMessageToAdapter(messageWrite);
+                    /* Not currently sending anything to BT */
                     break;
                 case Constants.MESSAGE_READ:
                     String readMessage = (String) msg.obj;
