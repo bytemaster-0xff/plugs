@@ -2,13 +2,18 @@ package com.teamwerx.plugs;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.app.Activity;
 import android.app.AlertDialog;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -19,31 +24,27 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
-import android.os.Looper;
-import android.os.Vibrator;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
+import android.os.Message;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.SurfaceView;
-import android.view.TextureView;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
-import android.widget.ImageView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.teamwerx.plugs.BlueTooth.BluetoothDeviceAdapter;
+import com.teamwerx.plugs.BlueTooth.BluetoothService;
+import com.teamwerx.plugs.BlueTooth.Constants;
 import com.teamwerx.plugs.Services.CameraHelper;
 import com.teamwerx.plugs.Services.UploadHelper;
-import com.teamwerx.plugs.data.Preferences;
-import com.teamwerx.plugs.image.ImageProcessing;
-import com.teamwerx.plugs.motion_detection.IMotionDetection;
+import com.teamwerx.plugs.motion_detection.IMotionDetectedListener;
+import com.teamwerx.plugs.noise.SoundMeter;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
@@ -58,23 +59,46 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.util.Calendar;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-public class MainActivity extends AppCompatActivity implements IMqttActionListener, MqttCallback,
+public class MainActivity extends AppCompatActivity
+        implements IMqttActionListener, MqttCallback, IMotionDetectedListener,
         SensorEventListener, LocationListener {
 
     MqttAndroidClient mClient;
 
+    boolean mHasStoragePermissions = false;
+    boolean mHasGPSPermissions = false;
+    boolean mHasCemeraPermissions = false;
+    boolean mHasRecorderPermissions = false;
+
+    private CameraHelper mCamera;
+
     private float lastX, lastY, lastZ;
+
+    private SurfaceView mCameraPreview;
+    private View mMQTTConnectionStatus;
+    private View mLocationStatus;
+    private View mVibrationDetected;
+    private View mVideoMotionDected;
+    private View mExternalSensorStatus;
+    private View mExternalSensorMotionStatus;
+    private View mAudioSensorStatus;
+
+    Calendar mMotionDetectedDateStamp = null;
+    private TextView mLocationInfo;
 
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
-    private float mVibrateThreshold = 0;
-    public Vibrator mVibrator;
 
-    SurfaceView mCameraPreview;
-    ImageView mSurfaceView;
+    private SoundMeter mSoundMeter;
+
+    private boolean mSoundDetected;
+    private Calendar mSoundDetectedDateStamp;
+
+    BluetoothAdapter bluetoothAdapter;
+    BluetoothDeviceAdapter bluetoothDevicesAdapter;
 
     public final static String TAG = "PLUGSAPP";
 
@@ -82,18 +106,9 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
     final int SERVER_HOST_PORT = 8050;
 
-    private CameraHelper mCamera;
-
-    private float deltaXMax = 0;
-    private float deltaYMax = 0;
-    private float deltaZMax = 0;
-
-    private float deltaX = 0;
-    private float deltaY = 0;
-    private float deltaZ = 0;
-
-    int TAKE_PHOTO_CODE = 0;
-    public static int count = 110;
+    private Handler resetVibrationHandler = new Handler();
+    private Handler mExternalSensorHeartbeatTimeout = new Handler();
+    private Handler mNoiseDetectionHandler = new Handler();
 
     private static final long MIN_DISTANCE_CHANGE_FOR_UPDATES = 10; // 10 meters
 
@@ -105,9 +120,6 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
     private Location mLastLocation;
     private LocationManager mLocationManager;
     private String mDeviceId;
-
-    ProgressBar mProgressBar;
-    TextView mProgressStatus;
 
     @SuppressLint("MissingPermission")
     @Override
@@ -121,80 +133,118 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
         mServerHostName = prefs.getString(SERVER_KEY, "");
         mDeviceId = prefs.getString(DEVICE_ID_KEY, "");
 
-        verifyAppPermissions(this);
-
         mCameraPreview = findViewById(R.id.cameraPreview);
-        mSurfaceView = findViewById(R.id.motionDetectorPreview);
+        mVideoMotionDected = findViewById(R.id.videoMotionStatusDisplay);
+        mVibrationDetected = findViewById(R.id.vibrationStatusDisplay);
+        mMQTTConnectionStatus = findViewById(R.id.mqttConnectionStatus);
+        mLocationStatus = findViewById(R.id.locationStatusDisplay);
+        mLocationStatus = findViewById(R.id.locationStatusDisplay);
+        mLocationInfo = findViewById(R.id.locationStatus);
+        mAudioSensorStatus = findViewById(R.id.audioSensorStatus);
 
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
+        mExternalSensorStatus = findViewById(R.id.externalSensorStatus);
+        mExternalSensorMotionStatus = findViewById(R.id.externalSensorMotionStatus);
+        mExternalSensorHeartbeatTimeout.postDelayed(externalSensorHeartbeatTimeout,4000);
+        mNoiseDetectionHandler.postDelayed(detectNoise, 250);
 
-        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        if (mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
-            mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-            mVibrateThreshold = mAccelerometer.getMaximumRange() / 2;
+        verifyAppPermissions();
+        initAccelerometer();
 
-        } else {
-            Log.d(TAG, "Sorry, no accelerator");
+        if(mHasRecorderPermissions) {
+            initMicophone();
         }
 
-        mLocationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
-                MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
-
-        mLastLocation = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        sendLocationInfo(mLastLocation);
-
-        mProgressBar = findViewById(R.id.uploadProgress);
-        mProgressStatus = findViewById(R.id.uploadStatus);
-        mProgressBar.setVisibility(View.GONE);
-        mVibrator = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
-        Log.d(TAG, "App Startup");
+        if (mHasGPSPermissions) {
+            initGPS();
+        }
     }
 
-    boolean mHasStoragePermissions = false;
-    boolean mHasGPSPermissions = false;
-    boolean mHasCemeraPermissions = false;
-
-    private static final int REQUEST_EXTERNAL_STORAGE = 1;
+    private static final int REQUEST_PERMISSIONS = 1;
     private static String[] APP_PERMISSIONS = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
     };
 
-    /**
-     * Checks if the app has permission to write to device storage
-     *
-     * If the app does not has permission then the user will be prompted to grant permissions
-     *
-     * @param activity
-     */
-    public void verifyAppPermissions(Activity activity) {
-        // Check if we have write permission
-        int permission = ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+    private void initMicophone() {
+        mSoundMeter = new SoundMeter();
+        mSoundMeter.start();
+    }
 
-        if (permission != PackageManager.PERMISSION_GRANTED || true) {
+    @SuppressLint("MissingPermission")
+    private void initGPS() {
+        mLocationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
+                MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
+        mLastLocation = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        setCurrentLocation(mLastLocation);
+    }
+
+    private void initAccelerometer() {
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
+            mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        } else {
+            Log.d(TAG, "Sorry, no accelerator");
+        }
+    }
+
+    public void verifyAppPermissions() {
+        // Check if we have write permission
+        mHasStoragePermissions = ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        mHasGPSPermissions = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        mHasCemeraPermissions = ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        mHasRecorderPermissions = ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+
+        if (!mHasStoragePermissions || !mHasGPSPermissions || !mHasCemeraPermissions || !mHasRecorderPermissions) {
             // We don't have permission so prompt the user
             ActivityCompat.requestPermissions(
-                    activity,
+                    this,
                     APP_PERMISSIONS,
-                    REQUEST_EXTERNAL_STORAGE
+                    REQUEST_PERMISSIONS
             );
         }
-        else
-        {
-            mHasStoragePermissions = true;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_PERMISSIONS: {
+                for(int idx = 0; idx < permissions.length; ++idx) {
+                    //YUCK THERE HAS TO BE A BETTER WAY!
+                    if(permissions[idx].contentEquals(Manifest.permission.READ_EXTERNAL_STORAGE) &&
+                            grantResults[idx] == PackageManager.PERMISSION_GRANTED) {
+                        mHasStoragePermissions = true;
+                    }
+
+                    if(permissions[idx].contentEquals(Manifest.permission.ACCESS_FINE_LOCATION) &&
+                            grantResults[idx] == PackageManager.PERMISSION_GRANTED) {
+                        mHasGPSPermissions = true;
+                    }
+
+                    if(permissions[idx].contentEquals(Manifest.permission.CAMERA) &&
+                            grantResults[idx] == PackageManager.PERMISSION_GRANTED) {
+                        mHasCemeraPermissions = true;
+                    }
+
+                    if(permissions[idx].contentEquals(Manifest.permission.RECORD_AUDIO) &&
+                            grantResults[idx] == PackageManager.PERMISSION_GRANTED) {
+                        mHasRecorderPermissions = true;
+                    }
+                }
+
+                if(mHasRecorderPermissions && mSoundMeter == null) {
+                    initMicophone();
+                }
+
+                if(mHasGPSPermissions && mLocationManager == null) {
+                    initGPS();
+                }
+            }
         }
     }
 
@@ -226,12 +276,8 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
         switch(id)
         {
             case R.id.action_camera_start: startCamera(); break;
@@ -241,10 +287,10 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             case R.id.action_take_photo: takePhoto(); break;
             case R.id.action_send_location: sendCurrentLocation(); break;
             case R.id.action_settings: showSettingsDialog(); break;
+            case R.id.action_connect_to_sensor: startSearching();
             default: super.onOptionsItemSelected(item);
         }
 
-        // If the default case was not executed (i.e. menu was handled, return true)
         return true;
     }
 
@@ -253,6 +299,7 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             mClient.close();
             mClient = null;
             mIsMQTTConnected = false;
+            mMQTTConnectionStatus.setBackgroundColor(Color.GREEN);
             invalidateOptionsMenu();
         }
     }
@@ -284,13 +331,18 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
     }
 
     private void startCamera() {
-        if(mCamera == null) {
-            mCamera = new CameraHelper(this, mCameraPreview);
-            mCamera.open();
-            mCameraPreview.setVisibility(View.VISIBLE);
-            mIsCameraActive = true;
-            invalidateOptionsMenu();
-         }
+        if(mHasCemeraPermissions) {
+            if (mCamera == null) {
+                mCamera = new CameraHelper(this, mCameraPreview);
+                mCamera.open();
+                mCameraPreview.setVisibility(View.VISIBLE);
+                mIsCameraActive = true;
+                invalidateOptionsMenu();
+            }
+        }
+        else {
+            verifyAppPermissions();
+        }
     }
 
     private void stopCamera() {
@@ -311,6 +363,8 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             sendLocationInfo(mLastLocation);
         }
         else {
+            mLocationStatus.setBackgroundColor(Color.RED);
+            mLocationInfo.setText("Location unavailable");
             Toast.makeText(this, "Sorry location information is not available", Toast.LENGTH_SHORT);
         }
     }
@@ -349,18 +403,13 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
         dlgBldr.show();
     }
 
-    private void startRecordingAudio() {
-
-
-    }
-
-    private void stopRecordingAudio() {
-
-    }
-
+    @SuppressLint("NewApi")
     private void takePhoto() {
         if(mCameraPreview.getVisibility() == View.VISIBLE &&
                 mCamera != null && mIsCameraActive) {
+
+            Toast.makeText(MainActivity.this, "Taking and uploading photo", Toast.LENGTH_LONG).show();
+
             Bitmap original = mCamera.getCurrentBitmap();
             Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, 480, 640, false);
             final String dir = Environment.getExternalStorageDirectory() + "/AppPicFolder/";
@@ -395,9 +444,50 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
                 e.printStackTrace();
             }
 
-            UploadHelper uploader = new UploadHelper(mProgressBar, mProgressStatus, mDeviceId, mServerHostName, SERVER_HOST_PORT);
+            UploadHelper uploader = new UploadHelper(mDeviceId, mServerHostName, SERVER_HOST_PORT);
             uploader.setMedia(fullFileName);
             uploader.execute();
+        }
+        else {
+            Toast.makeText(MainActivity.this, "Camera not ready.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    Calendar lastHeartbeat = null;
+
+    private Runnable externalSensorHeartbeatTimeout = new Runnable() {
+        @Override
+        public void run() {
+            if(lastHeartbeat != null) {
+                long deltaT = (Calendar.getInstance().getTime().getTime() - lastHeartbeat.getTime().getTime());
+                if (deltaT > 3000){
+                    mExternalSensorStatus.setBackgroundColor(Color.LTGRAY);
+                }
+            }
+
+            mExternalSensorHeartbeatTimeout.postDelayed(externalSensorHeartbeatTimeout,4000);
+        }
+    };
+
+    public void externalHeartbeatPing() {
+        lastHeartbeat = Calendar.getInstance();
+        mExternalSensorStatus.setBackgroundColor(Color.GREEN);
+    }
+
+    public void externalMotion(boolean hasMotion) {
+        if(hasMotion) {
+            mExternalSensorMotionStatus.setBackgroundColor(Color.GREEN);
+
+            if (mIsMQTTConnected) {
+                try {
+                    mClient.publish(String.format("plugs/%s/pir", mDeviceId), "{motion:true}".getBytes(), 0, false);
+                } catch (MqttException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        else {
+            mExternalSensorMotionStatus.setBackgroundColor(Color.LTGRAY);
         }
     }
 
@@ -408,6 +498,11 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             mClient.subscribe("incoming/dev001/+",0);
             invalidateOptionsMenu();
             mIsMQTTConnected = true;
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() { mMQTTConnectionStatus.setBackgroundColor(Color.GREEN); }
+            });
 
             if(mLastLocation != null) {
                 sendLocationInfo(mLastLocation);
@@ -420,19 +515,33 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
     }
 
     @Override
-    public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+    public void onFailure(IMqttToken asyncActionToken, final Throwable exception) {
         // Something went wrong e.g. connection timeout or firewall problems
         Log.d(TAG, "onFailure");
         Log.d(TAG, exception.getCause().getMessage());
         Log.d(TAG, "onFailure");
 
-        Toast.makeText(this, "Could not connect to MQTT Server", Toast.LENGTH_SHORT);
-        Toast.makeText(this, exception.getCause().getMessage(), Toast.LENGTH_LONG);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+            mMQTTConnectionStatus.setBackgroundColor(Color.RED);
+            Toast.makeText(MainActivity.this, "Could not connect to MQTT Server - " + exception.getCause().getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+
         invalidateOptionsMenu();
     }
 
     @Override
     public void connectionLost(Throwable cause){
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mMQTTConnectionStatus.setBackgroundColor(Color.RED);
+            }});
+
+        Toast.makeText(MainActivity.this, "Lost connection to MQTT Server", Toast.LENGTH_LONG).show();
+
         Log.d(TAG, "MQTT Server connection lost" + cause.getMessage());
         mIsMQTTConnected = false;
         invalidateOptionsMenu();
@@ -458,46 +567,83 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
         Log.d(TAG, "Delivery complete");
     }
 
-    Calendar lastMotion = null;
+    private Runnable resetVibration = new Runnable() {
+        @Override
+        public void run() {
+            mVibrationDetected.setBackgroundColor(Color.LTGRAY);
+        }
+    };
+
+    private Runnable detectNoise = new Runnable() {
+        @Override
+        public void run() {
+            if(mSoundMeter != null) {
+                if(mSoundMeter.getAmplitude() > 1.0) {
+                    if(!mSoundDetected) {
+                        if (mIsMQTTConnected) {
+                             try {
+                                 mClient.publish(String.format("plugs/%s/audio", mDeviceId), "{noise:true}".getBytes(), 0, false);
+                             } catch (MqttException e) {
+                                 e.printStackTrace();
+                             }
+                         }
+                         mSoundDetected = true;
+                    }
+
+                    mAudioSensorStatus.setBackgroundColor(Color.GREEN);
+
+                    mSoundDetectedDateStamp = Calendar.getInstance();
+                }
+                else if(mSoundDetected && mSoundDetectedDateStamp != null){
+                    if ((Calendar.getInstance().getTime().getTime() - mSoundDetectedDateStamp.getTime().getTime()) > 3000) {
+                        mSoundDetected = false;
+                        mSoundDetectedDateStamp = null;
+                        mAudioSensorStatus.setBackgroundColor(Color.LTGRAY);
+                    }
+                }
+            }
+
+            mNoiseDetectionHandler.postDelayed(detectNoise, 250);
+        }
+    };
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        deltaX = Math.abs(lastX - event.values[0]);
-        deltaY = Math.abs(lastY - event.values[1]);
-        deltaZ = Math.abs(lastZ - event.values[2]);
+        float deltaX = Math.abs(lastX - event.values[0]);
+        float deltaY = Math.abs(lastY - event.values[1]);
+        float deltaZ = Math.abs(lastZ - event.values[2]);
 
         lastX = event.values[0];
         lastY = event.values[1];
         lastZ = event.values[2];
 
-        if(mClient != null && mIsMQTTConnected) {
-            if (deltaX > 0.1 || deltaY > 0.1 || deltaZ > 0.1)
-            {
-                if(lastMotion != null)
-                {
-                    if((Calendar.getInstance().getTime().getTime() - lastMotion.getTime().getTime()) / 1000 < MOTION_INTERVAL)
-                    {
-                        return;
-                    }
+
+        if (deltaX > 0.1 || deltaY > 0.1 || deltaZ > 0.1) {
+            if (mMotionDetectedDateStamp != null) {
+                if ((Calendar.getInstance().getTime().getTime() - mMotionDetectedDateStamp.getTime().getTime()) / 1000 < MOTION_INTERVAL) {
+                    return;
                 }
+            }
 
-                lastMotion = Calendar.getInstance();
+            Log.d(TAG, "Motion Detected:" + deltaX + ":" + deltaY + ":" + deltaZ);
 
-
+            mMotionDetectedDateStamp = Calendar.getInstance();
+            if (mIsMQTTConnected) {
                 try {
                     mClient.publish(String.format("plugs/%s/vibration", mDeviceId), "{vibration:true}".getBytes(), 0, false);
                 } catch (MqttException e) {
                     e.printStackTrace();
                 }
-
-                Log.d(TAG, "Motion Detected:" + deltaX + ":" + deltaY + ":" + deltaZ);
             }
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mVibrationDetected.setBackgroundColor(Color.GREEN);
+                    resetVibrationHandler.postDelayed(resetVibration, 5000);
+                }
+            });
         }
-    }
-
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {
-
     }
 
     private void sendLocationInfo(Location location) {
@@ -505,7 +651,6 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
             try {
                 String locationUpdate = String.format("{'lat':%.7f, 'lon':%.7f}", location.getLatitude(), location.getLongitude());
                 Log.d(TAG, locationUpdate);
-
                 mClient.publish(String.format("plugs/%s/location", mDeviceId), locationUpdate.getBytes(), 0, false);
             } catch (MqttException e) {
                 e.printStackTrace();
@@ -513,23 +658,186 @@ public class MainActivity extends AppCompatActivity implements IMqttActionListen
         }
     }
 
+    public void setCurrentLocation(Location location) {
+        mLastLocation = location;
+        mLocationStatus.setBackgroundColor(Color.GREEN);
+        String locationUpdate = String.format("Lat: %.4f, Lon: %.4f", mLastLocation.getLatitude(),location.getLongitude());
+        mLocationInfo.setText(locationUpdate);
+    }
+
+
     @Override
     public void onLocationChanged(Location location) {
+        setCurrentLocation(location);
         sendLocationInfo(location);
     }
+    @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
+    @Override public void onProviderEnabled(String provider) { }
+    @Override public void onProviderDisabled(String provider) { }
+    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) { }
+
+    Handler resetVideoMotionHandler = new Handler();
+    private Runnable resetVideoMotion = new Runnable() {
+        @Override
+        public void run() {
+            mVideoMotionDected.setBackgroundColor(Color.LTGRAY);
+        }
+    };
 
     @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
+    public void onMotionDetected() {
+        try {
+            if(mIsMQTTConnected) {
+                mClient.publish(String.format("plugs/%s/videomotion", mDeviceId), "{videoMotion:true}".getBytes(), 0, false);
+            }
 
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mVideoMotionDected.setBackgroundColor(Color.GREEN);
+            }});
+
+        resetVideoMotionHandler.postDelayed(resetVideoMotion, 3000);
     }
 
-    @Override
-    public void onProviderEnabled(String provider) {
-
+    private void enableBluetooth() {
+        Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+        startActivityForResult(enableBtIntent, Constants.REQUEST_ENABLE_BT);
     }
 
-    @Override
-    public void onProviderDisabled(String provider) {
+    BluetoothService mBluetoothService;
+
+    @Override protected void onStart() {
+        super.onStart();
+
+        Log.d(MainActivity.TAG, "Registering receiver");
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(BluetoothDevice.ACTION_FOUND);
+        filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+        filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
+        registerReceiver(mReceiver, filter);
+    }
+
+    @Override protected void onStop() {
+        super.onStop();
+        Log.d(MainActivity.TAG, "Receiver unregistered");
+        unregisterReceiver(mReceiver);
+    }
+
+    private void startSearching(){
+        bluetoothDevicesAdapter = new BluetoothDeviceAdapter(this);
+
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if(bluetoothAdapter.isEnabled()) {
+            if(bluetoothAdapter == null) {
+                Toast.makeText(this, "No bluetooth adapter found", Toast.LENGTH_SHORT).show();
+            }
+            else {
+                if(!bluetoothAdapter.startDiscovery()) {
+                    Toast.makeText(this, "Failed to start searching", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
+        else {
+            enableBluetooth();
+        }
+    }
+
+    // Create a BroadcastReceiver for ACTION_FOUND
+    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            // When discovery finds a device
+            if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+                // Get the BluetoothDevice object from the Intent
+                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                device.fetchUuidsWithSdp();
+
+
+                if(device.getName().contentEquals("HC-05")) {
+                    bluetoothAdapter.cancelDiscovery();
+
+                    mBluetoothMessageHandler = new BluetoothMessageHandler(MainActivity.this);
+                    mBluetoothService = new BluetoothService(mBluetoothMessageHandler, device);
+                    mBluetoothService.connect();
+
+                    Log.d(MainActivity.TAG, String.format("Found device %s", device.getName()));
+                }
+
+            } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
+                Log.d(MainActivity.TAG, "Finished searching");
+            } else if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+                int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                switch (state) {
+                    case BluetoothAdapter.STATE_OFF:
+                        Toast.makeText(MainActivity.this, "Bluetooth turned off", Toast.LENGTH_SHORT).show();
+                        break;
+                }
+            }
+        }
+    };
+
+    BluetoothMessageHandler mBluetoothMessageHandler;
+
+    private class BluetoothMessageHandler extends Handler {
+
+        private final WeakReference<MainActivity> mActivity;
+
+        public BluetoothMessageHandler(MainActivity activity) {
+            mActivity = new WeakReference<>(activity);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+
+            switch (msg.what) {
+                case Constants.MESSAGE_STATE_CHANGE:
+                    switch (msg.arg1) {
+                        case Constants.STATE_CONNECTED:
+                            Toast.makeText(MainActivity.this, "Bluetooth connected", Toast.LENGTH_SHORT).show();
+                            break;
+                        case Constants.STATE_CONNECTING:
+                            Toast.makeText(MainActivity.this, "Bluetooth connecting", Toast.LENGTH_SHORT).show();
+                            break;
+                        case Constants.STATE_NONE:
+                            break;
+                        case Constants.STATE_ERROR:
+                            Toast.makeText(MainActivity.this, "Error Connecting", Toast.LENGTH_SHORT).show();
+                            break;
+                    }
+                    break;
+                case Constants.MESSAGE_WRITE:
+                    byte[] writeBuf = (byte[]) msg.obj;
+                    // construct a string from the buffer
+                    String writeMessage = new String(writeBuf);
+//                    ChatMessage messageWrite = new ChatMessage("Me", writeMessage);
+  //                  activity.addMessageToAdapter(messageWrite);
+                    break;
+                case Constants.MESSAGE_READ:
+                    String readMessage = (String) msg.obj;
+                    if(readMessage.contains("ping")) {
+                        MainActivity.this.externalHeartbeatPing();
+                    }
+                    else if(readMessage.contains("on")) {
+                        MainActivity.this.externalMotion(true);
+                    }
+                    else if(readMessage.contains("off")) {
+                        MainActivity.this.externalMotion(false);
+                    }
+                    break;
+
+                case Constants.MESSAGE_SNACKBAR:
+
+
+
+                    break;
+            }
+        }
+
 
     }
 }
