@@ -41,5 +41,8 @@ You will also need something to program the arduino
 
 *Note* - if you want to build more of these motion detectors you can use the AT command set of the HC-05 to give them unique PIN codes and names.  This is slightly more advanced and not necessary, this [article](http://www.martyncurrey.com/arduino-with-hc-05-bluetooth-module-at-mode/) gives you a little more information on how you could do that.
 
+
 ### Wiring Diagram
 ![Wiring Diagram](./images/ExternalSensorWiring.png)
+
+Any questions please contact [Kevin D. Wolf](mailto:kevinw@software-logistics.com)
