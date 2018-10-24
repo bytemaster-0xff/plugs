@@ -60,7 +60,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
+import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity
         implements IMqttActionListener, MqttCallback, IMotionDetectedListener,
@@ -132,6 +135,8 @@ public class MainActivity extends AppCompatActivity
         SharedPreferences prefs = this.getPreferences(Context.MODE_PRIVATE);
         mServerHostName = prefs.getString(SERVER_KEY, "");
         mDeviceId = prefs.getString(DEVICE_ID_KEY, "");
+        String targetDeviceIds = prefs.getString(TARGET_DEVICES, "");
+        parseDeviceIDs(targetDeviceIds);
 
         mCameraPreview = findViewById(R.id.cameraPreview);
         mVideoMotionDected = findViewById(R.id.videoMotionStatusDisplay);
@@ -250,6 +255,8 @@ public class MainActivity extends AppCompatActivity
 
     private boolean mIsMQTTConnected = false;
     private boolean mIsCameraActive = false;
+
+    private List<String> mTargetDevices = new ArrayList<>();
 
     @Override
     public boolean onPrepareOptionsMenu (Menu menu) {
@@ -370,7 +377,19 @@ public class MainActivity extends AppCompatActivity
     }
 
     final String SERVER_KEY = "SERVER_SETTING";
+    final String TARGET_DEVICES = "TARGET_DEVICES_SETTINGS";
     final String DEVICE_ID_KEY = "DEVICE_ID_SETTING";
+
+    private boolean parseDeviceIDs(String idString) {
+        String[] ids = idString.split(",");
+
+        mTargetDevices.clear();
+        for(String part : ids){
+            mTargetDevices.add(part);
+        }
+
+        return true;
+    }
 
     private void showSettingsDialog() {
         LayoutInflater inflater = this.getLayoutInflater();
@@ -381,8 +400,19 @@ public class MainActivity extends AppCompatActivity
 
         final EditText srvr = content.findViewById(R.id.settings_server);
         final EditText deviceId = content.findViewById(R.id.settings_device_id);
+        final EditText targetDeviceIds = content.findViewById(R.id.settings_target_device_id);
+
         srvr.setText(mServerHostName);
         deviceId.setText(mDeviceId);;
+
+
+        String targetDeviceString = "";
+        for(String targetDevice : mTargetDevices) {
+            targetDeviceString += String.format("%s%s", targetDeviceString.length() > 0 ? "," : "", targetDevice);
+        }
+
+        targetDeviceIds.setText(targetDeviceString);
+
         AlertDialog.Builder dlgBldr = new AlertDialog.Builder(this);
         dlgBldr.setTitle(R.string.app_name);
         dlgBldr.setView(content);
@@ -393,9 +423,15 @@ public class MainActivity extends AppCompatActivity
             public void onClick(DialogInterface dlg, int which){
                 mServerHostName = srvr.getText().toString();
                 mDeviceId = deviceId.getText().toString();
+                String idString = targetDeviceIds.getText().toString();
 
                 prefs.edit().putString(SERVER_KEY, mServerHostName).commit();
                 prefs.edit().putString(DEVICE_ID_KEY, mDeviceId).commit();
+
+                if(parseDeviceIDs(idString)) {
+                    prefs.edit().putString(TARGET_DEVICES, idString).commit();
+                }
+
                 invalidateOptionsMenu();
             }
         });
@@ -485,6 +521,8 @@ public class MainActivity extends AppCompatActivity
                     e.printStackTrace();
                 }
             }
+
+            sendCaptureMedia();
         }
         else {
             mExternalSensorMotionStatus.setBackgroundColor(Color.LTGRAY);
@@ -495,7 +533,7 @@ public class MainActivity extends AppCompatActivity
     public void onSuccess(IMqttToken asyncActionToken) {
         Log.d(TAG, "onSuccess");
         try {
-            mClient.subscribe("incoming/dev001/+",0);
+            mClient.subscribe(String.format("incoming/%s/+", mDeviceId),0);
             invalidateOptionsMenu();
             mIsMQTTConnected = true;
 
@@ -570,7 +608,7 @@ public class MainActivity extends AppCompatActivity
     private Runnable resetVibration = new Runnable() {
         @Override
         public void run() {
-            mVibrationDetected.setBackgroundColor(Color.LTGRAY);
+        mVibrationDetected.setBackgroundColor(Color.LTGRAY);
         }
     };
 
@@ -588,6 +626,8 @@ public class MainActivity extends AppCompatActivity
                              }
                          }
                          mSoundDetected = true;
+
+                        sendCaptureMedia();
                     }
 
                     mAudioSensorStatus.setBackgroundColor(Color.GREEN);
@@ -617,7 +657,6 @@ public class MainActivity extends AppCompatActivity
         lastY = event.values[1];
         lastZ = event.values[2];
 
-
         if (deltaX > 0.1 || deltaY > 0.1 || deltaZ > 0.1) {
             if (mMotionDetectedDateStamp != null) {
                 if ((Calendar.getInstance().getTime().getTime() - mMotionDetectedDateStamp.getTime().getTime()) / 1000 < MOTION_INTERVAL) {
@@ -635,6 +674,8 @@ public class MainActivity extends AppCompatActivity
                     e.printStackTrace();
                 }
             }
+
+            sendCaptureMedia();
 
             runOnUiThread(new Runnable() {
                 @Override
@@ -659,10 +700,16 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void setCurrentLocation(Location location) {
-        mLastLocation = location;
-        mLocationStatus.setBackgroundColor(Color.GREEN);
-        String locationUpdate = String.format("Lat: %.4f, Lon: %.4f", mLastLocation.getLatitude(),location.getLongitude());
-        mLocationInfo.setText(locationUpdate);
+        if(location != null) {
+            mLastLocation = location;
+            mLocationStatus.setBackgroundColor(Color.GREEN);
+            String locationUpdate = String.format("Lat: %.4f, Lon: %.4f", mLastLocation.getLatitude(), mLastLocation.getLongitude());
+            mLocationInfo.setText(locationUpdate);
+        }
+        else {
+            mLocationStatus.setBackgroundColor(Color.RED);
+            mLocationInfo.setText("Location unavailable");
+        }
     }
 
 
@@ -684,6 +731,20 @@ public class MainActivity extends AppCompatActivity
         }
     };
 
+    private void sendCaptureMedia() {
+        try {
+            if (mIsMQTTConnected) {
+                for (String targetDeviceId : mTargetDevices) {
+                    String topic = String.format("incoming/%s/takephoto", targetDeviceId);
+                    Log.d(TAG, topic);
+                    mClient.publish(topic, "{capture:true}".getBytes(), 0, false);
+                }
+            }
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void onMotionDetected() {
         try {
@@ -694,6 +755,8 @@ public class MainActivity extends AppCompatActivity
         } catch (MqttException e) {
             e.printStackTrace();
         }
+
+        sendCaptureMedia();
 
         runOnUiThread(new Runnable() {
             @Override

@@ -24,4 +24,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="device001"/>
+
+    <TextView
+        android:text="Target Device Id"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <EditText
+        android:id="@+id/settings_target_device_id"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="dev001,dev002,dev003"/>
 </LinearLayout>

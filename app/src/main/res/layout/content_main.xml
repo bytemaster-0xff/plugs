@@ -16,32 +16,32 @@
         android:orientation="vertical"
         android:layout_weight="0.6">
 
-        <TableRow android:layout_marginBottom="10dp">
+        <TableRow android:layout_marginBottom="5dp">
             <View
                 android:background="#FF0000"
-                android:layout_width="30dp"
+                android:layout_width="20dp"
                 android:id="@+id/mqttConnectionStatus"
-                android:layout_height="30dp">
+                android:layout_height="20dp">
             </View>
 
-            <TextView android:textSize="24dp"
+            <TextView android:textSize="16dp"
                 android:paddingLeft="10dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="?android:attr/textAppearanceMedium"
-                android:text="MQTT Connected"
+                android:text="Server Connection"
                 />
         </TableRow>
 
-        <TableRow android:layout_marginBottom="10dp">
+        <TableRow android:layout_marginBottom="5dp">
             <View
                 android:background="#FF0000"
-                android:layout_width="30dp"
+                android:layout_width="20dp"
                 android:id="@+id/locationStatusDisplay"
-                android:layout_height="30dp">
+                android:layout_height="20dp">
             </View>
 
-            <TextView android:textSize="24dp"
+            <TextView android:textSize="16dp"
                 android:paddingLeft="10dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -50,15 +50,15 @@
                 android:id="@+id/locationStatus" />
         </TableRow>
 
-        <TableRow android:layout_marginBottom="10dp">
+        <TableRow android:layout_marginBottom="5dp">
             <View
                 android:background="#CCCCCC"
-                android:layout_width="30dp"
+                android:layout_width="20dp"
                 android:id="@+id/externalSensorStatus"
-                android:layout_height="30dp">
+                android:layout_height="20dp">
             </View>
 
-            <TextView android:textSize="24dp"
+            <TextView android:textSize="16dp"
                 android:paddingLeft="10dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -66,15 +66,15 @@
                 android:text="External Sensor Heartbeat"/>
         </TableRow>
 
-        <TableRow android:layout_marginBottom="10dp">
+        <TableRow android:layout_marginBottom="5dp">
             <View
                 android:background="#CCCCCC"
                 android:layout_width="30dp"
                 android:id="@+id/vibrationStatusDisplay"
-                android:layout_height="30dp">
+                android:layout_height="20dp">
             </View>
 
-            <TextView android:textSize="24dp"
+            <TextView android:textSize="16dp"
                 android:paddingLeft="10dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -83,15 +83,15 @@
                 android:id="@+id/vibrationStatus" />
         </TableRow>
 
-        <TableRow android:layout_marginBottom="10dp">
+        <TableRow android:layout_marginBottom="5dp">
             <View
                 android:background="#CCCCCC"
                 android:layout_width="30dp"
                 android:id="@+id/videoMotionStatusDisplay"
-                android:layout_height="30dp">
+                android:layout_height="20dp">
             </View>
 
-            <TextView android:textSize="24dp"
+            <TextView android:textSize="16dp"
                 android:paddingLeft="10dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -100,15 +100,15 @@
                 android:id="@+id/videoMotionstatus" />
         </TableRow>
 
-        <TableRow android:layout_marginBottom="10dp">
+        <TableRow android:layout_marginBottom="5dp">
             <View
                 android:background="#CCCCCC"
                 android:layout_width="30dp"
                 android:id="@+id/externalSensorMotionStatus"
-                android:layout_height="30dp">
+                android:layout_height="20dp">
             </View>
 
-            <TextView android:textSize="24dp"
+            <TextView android:textSize="16dp"
                 android:paddingLeft="10dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -116,15 +116,15 @@
                 android:text="External Motion Detector" />
         </TableRow>
 
-        <TableRow android:layout_marginBottom="10dp">
+        <TableRow android:layout_marginBottom="5dp">
             <View
                 android:background="#CCCCCC"
                 android:layout_width="30dp"
                 android:id="@+id/audioSensorStatus"
-                android:layout_height="30dp">
+                android:layout_height="20dp">
             </View>
 
-            <TextView android:textSize="24dp"
+            <TextView android:textSize="16dp"
                 android:paddingLeft="10dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
