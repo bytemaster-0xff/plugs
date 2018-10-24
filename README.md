@@ -39,7 +39,6 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 1. Ability to add specificy device location
 1. Ability to review all triggers for sensors
 1. Ability to review all media captured by phones
-1. Detect which phones are online/battery level
 1. Sends notifications when motion is detected or photos are captured
 
 ## Possible next steps
@@ -53,4 +52,5 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 1. Integration with ATAK
 1. Current version requires app to be running and in the foreground, it should be possible to build this as a service.
 1. Create android application that would act as base station.
-1. Integration with Mobile [https://github.com/bytemaster-0xff/oshapp](TEAMWERX Mobile Data Challenge App) and GeoPackages
+1. Have a "darken" screen view where even though app is running there is no unser interface.
+1. Integration with Mobile [TEAMWERX Mobile Data Challenge App](https://github.com/bytemaster-0xff/oshapp) and GeoPackages
