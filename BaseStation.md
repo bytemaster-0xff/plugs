@@ -6,7 +6,7 @@ The base station is composed of two components a user interface and a run time.
 The user interface will let you create groups of android devices that will make up your sensor network. 
 It also allows you to view the media captured by devices.  Please watch the following video for more information
 
-https://www.youtube.com/watch?v=vRtTBfIpvDA
+[Base Station](https://www.youtube.com/watch?v=vRtTBfIpvDA)
 
 ## Run Time
 The runtime is our cloud based application that facilitates communications between the android devices.  The runtime hosts an MQTT broker
