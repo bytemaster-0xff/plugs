@@ -10,6 +10,11 @@ The android application was created as a custom app, the back-end and management
 
 The primary focus area for phase 1 for our effort was to build a fairly complete functioning system that would demonstrate capabilities.
 
+## Videos
+1. [Video of Android PLUGS app](https://www.youtube.com/watch?v=R0mtmc-4-DA)
+1. [Video of Base station](https://www.youtube.com/watch?v=vRtTBfIpvDA)
+
+
 ## Android Application Features
 1. Written as an android application with Android Studio
 1. Minimum android versions 4.1
