@@ -26,20 +26,22 @@ You will also need something to program the arduino
 1. [Arduino FTDI Programmer](https://www.amazon.com/Sparkfun-Electronics-4446819-FTDI-Cable/dp/B00DJBNDHE/ref=sr_1_4?s=industrial&ie=UTF8&qid=1540403379&sr=1-4&keywords=arduino+ftdi+cable&dpID=41uimvvUC%252BL&preST=_SY300_QL70_&dpSrc=srch)
 
 ### Assembly Instructions
-1. Create power cable - Simple cut the USB Micro end of the USB cable, strip the wires and just use the Red and the Black wires.
+1. Create power cable - Simply cut the USB Micro end off of the [USB cable](https://www.amazon.com/Android-COVERY-Charging-Samsung-Motorola/dp/B07F9LWQTM/ref=sr_1_6?ie=UTF8&qid=1540403178&sr=8-6&keywords=USB+Cable&dpID=51YH%252BgthZaL&preST=_SY300_QL70_&dpSrc=srch), strip the wires and just use the Red and the Black wires from the USB cable.
 1. [Solder Pins to Arduino](https://www.youtube.com/watch?v=37mW1i_oEpA)
-1. Connect the programmer to the arduino
+1. Connect the programmer to the Arduino [possible help on getting driver installed](https://learn.sparkfun.com/tutorials/how-to-install-ftdi-drivers/all)
 1. Upload [software](https://github.com/bytemaster-0xff/plugs/tree/master/arduino/motiondetector) to [Arduino](https://www.arduino.cc/en/Guide/ArduinoProMini)
-1. Using the female to female jumpers wires, connect Arduino to HC-05 as in the diagram below
+1. Using the female to [female jumpers wires](https://www.amazon.com/Elegoo-EL-CP-004-Multicolored-Breadboard-arduino/dp/B01EV70C78/ref=pd_bxgy_147_img_3?_encoding=UTF8&pd_rd_i=B01EV70C78&pd_rd_r=d03e2a3f-d7b4-11e8-8b2a-43f93729c796&pd_rd_w=Q6UF4&pd_rd_wg=qe7a6&pf_rd_i=desktop-dp-sims&pf_rd_m=ATVPDKIKX0DER&pf_rd_p=6725dbd6-9917-451d-beba-16af7874e407&pf_rd_r=W49VJ4N2NY4P7QWWVXAN&pf_rd_s=desktop-dp-sims&pf_rd_t=40701&psc=1&refRID=W49VJ4N2NY4P7QWWVXAN), connect Arduino to HC-05 as in the diagram below
 1. Using the female to female jumpers wires, connect PIR to power cable and Arduino
-1. Connect the red and black wires from the USB Cable above to the red and black wires in the diagram below.
+1. Connect the red and black wires from the USB Cable you modified in step one above to the red and black wires in the diagram below.
 1. Plug the USB cable into your battery pack
 1. Pair your phone with the sensor.  Simply power up the external sensor, search for a new device with the name with the name HC-05 and use the PIN either 1234, if that doesn't work try 1234
 1. Make sure you set the jumper on the PIR detector "Repeat Trigger"
 ![PIR Detector](./images/PIRMotion.png)
 
 
-*Note* - if you want to build more of these motion detectors you can use the AT command set of the HC-05 to give them unique PIN codes and names.  This is slightly more advanced and not necessary, this [article](http://www.martyncurrey.com/arduino-with-hc-05-bluetooth-module-at-mode/) gives you a little more information on how you could do that.
+*Note 1* - if you want to build more of these motion detectors you can use the AT command set of the HC-05 to give them unique PIN codes and names.  This is slightly more advanced and not necessary, this [article](http://www.martyncurrey.com/arduino-with-hc-05-bluetooth-module-at-mode/) gives you a little more information on how you could do that.
+
+*Note 2* - this will likely work well for a quick and dirty prototype for maximum reliability in the field, rather than using slide-on jumper wires you should solder all the connections.
 
 
 ### Wiring Diagram
