@@ -25,6 +25,7 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 1. [Sensor App](SensorApp.md)
 1. [External Sensors](ExternalSensors.md)
 1. [Base Station](BaseStation.md)
+1. [Quick Start](QuickStart.md)
 
 
 ## Android Application Features
