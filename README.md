@@ -15,7 +15,7 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 1. [Video of Base station](https://www.youtube.com/watch?v=vRtTBfIpvDA)
 
 ## Releases
-[Version 1.0](./releases/app-release.apk)
+[Version 1.0](https://github.com/bytemaster-0xff/plugs/raw/master/releases/app-release.apk)
 
 ## Phase I/Phase II Architecture
 
