@@ -18,6 +18,10 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 
 ![alt text](./images/Architecture.png)
 
+## Additional Resources
+1. [Sensor App](SensorApp.md)
+1. [External Sensors](ExternalSensors.md)
+
 ## Android Application Features
 1. Written as an android application with Android Studio
 1. Minimum android versions 4.1
