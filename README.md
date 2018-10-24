@@ -10,6 +10,18 @@ The android application was created as a custom app, the back-end and management
 
 The primary focus area for phase 1 for our effort was to build a fairly complete functioning system that would demonstrate capabilities.
 
+## Videos
+1. [Video of Android PLUGS app](https://www.youtube.com/watch?v=R0mtmc-4-DA)
+1. [Video of Base station](https://www.youtube.com/watch?v=vRtTBfIpvDA)
+
+## Phase I/Phase II Architecture
+
+![alt text](./images/Architecture.png)
+
+## Additional Resources
+1. [Sensor App](SensorApp.md)
+1. [External Sensors](ExternalSensors.md)
+
 ## Android Application Features
 1. Written as an android application with Android Studio
 1. Minimum android versions 4.1
@@ -24,7 +36,6 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 ## Base Station Features
 1. Add new Android Devices
 1. Ability to add specificy device location
-1. Specify which phones should be triggerred to capture media when sensors are triggered
 1. Ability to review all triggers for sensors
 1. Ability to review all media captured by phones
 1. Detect which phones are online/battery level
