@@ -21,6 +21,7 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 ## Additional Resources
 1. [Sensor App](SensorApp.md)
 1. [External Sensors](ExternalSensors.md)
+1. [Base Station](BaseStation.md)
 
 ## Android Application Features
 1. Written as an android application with Android Studio
