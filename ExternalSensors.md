@@ -7,7 +7,7 @@ Although we are using vibration, audio and video detection from the phone there 
 This page will discuss that external sensor, how it can relatively easily be built and how it can be extended.
 
 # Overview
-We chose the option of simplicity for creating our external sensors, the core consists of an Arduino Pro Mini, and an HC-05 bluetooth module as well as
+We chose the option of simplicity for creating our external sensors, the core consists of an Arduino Pro Mini, and an HC-05 Bluetooth module as well as
 a power source which can simply be a cell phone charging battery pack.  A complete cost for building a sensor pack should be less than $30 which entirely consists of standard parts you can obtain from Amazon.
 and only requires connecting a few wires.  For our demo we chose to use a simple PIR detection module, however based on needs this could 
 easily be extended.  Once you have built your sensor module you simply need to download the Arduino Sketch and pair it with your phone.  
