@@ -15,7 +15,7 @@ The primary focus area for phase 1 for our effort was to build a fairly complete
 1. [Video of Base station](https://www.youtube.com/watch?v=vRtTBfIpvDA)
 
 ## Android APK Releases
-[Allow Install from Unknown Sources](https://developer.android.com/distribute/marketing-tools/alternative-distribution#unknown-sources)
+*Please Read* [Allow Install from Unknown Sources](https://developer.android.com/distribute/marketing-tools/alternative-distribution#unknown-sources)
 
 [Version 1.0](https://github.com/bytemaster-0xff/plugs/raw/master/releases/app-release.apk)
 
