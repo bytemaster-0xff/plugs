@@ -21,6 +21,7 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -63,6 +64,8 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity
@@ -77,6 +80,25 @@ public class MainActivity extends AppCompatActivity
     boolean mHasRecorderPermissions = false;
 
     private CameraHelper mCamera;
+
+    // battery sensor begin
+    // https://developer.android.com/training/monitoring-device-state/battery-monitoring.html#java
+    private Timer batteryTimer = new Timer();
+    private TimerTask batteryTask = new TimerTask(){
+        @Override
+        public void run(){
+            //BatteryManager batteryManager = (BatteryManager)getSystemService(BATTERY_SERVICE);
+            IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+            Intent batteryStatus = getApplicationContext().registerReceiver(null, batteryFilter);
+            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            float batteryPercent = level / (float)scale  * 100;
+            Log.d("batt level ", String.valueOf(level));
+            Log.d("batt scale ", String.valueOf(scale));
+            Log.d("batt % ", String.valueOf(batteryPercent));
+        }
+    };
+    // battery sensor end
 
     private float lastX, lastY, lastZ;
 
@@ -155,6 +177,8 @@ public class MainActivity extends AppCompatActivity
 
         verifyAppPermissions();
         initAccelerometer();
+
+        batteryTimer.schedule(batteryTask, 1000 * 5, 1000 * 5);
 
         if(mHasRecorderPermissions) {
             initMicophone();
@@ -304,9 +328,9 @@ public class MainActivity extends AppCompatActivity
 
     private void disconnectFromMQTT() {
         if(mClient != null){
+            mIsMQTTConnected = false;
             mClient.close();
             mClient = null;
-            mIsMQTTConnected = false;
             mMQTTConnectionStatus.setBackgroundColor(Color.GREEN);
             invalidateOptionsMenu();
         }
@@ -316,10 +340,8 @@ public class MainActivity extends AppCompatActivity
         Log.d(TAG, "Connecting to MQTT");
 
         String clientId = MqttClient.generateClientId();
-         mClient = new MqttAndroidClient(this.getApplicationContext(),
-                 "tcp://" + mServerHostName + ":1883",
-                        clientId);
-         mClient.setCallback(this);
+        mClient = new MqttAndroidClient(this.getApplicationContext(), "tcp://" + mServerHostName + ":1883", clientId);
+        mClient.setCallback(this);
 
         try {
             MqttConnectOptions options = new MqttConnectOptions();
