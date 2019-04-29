@@ -87,15 +87,25 @@ public class MainActivity extends AppCompatActivity
     private TimerTask batteryTask = new TimerTask(){
         @Override
         public void run(){
-            //BatteryManager batteryManager = (BatteryManager)getSystemService(BATTERY_SERVICE);
-            IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-            Intent batteryStatus = getApplicationContext().registerReceiver(null, batteryFilter);
-            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-            int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-            float batteryPercent = level / (float)scale  * 100;
-            Log.d("batt level ", String.valueOf(level));
-            Log.d("batt scale ", String.valueOf(scale));
-            Log.d("batt % ", String.valueOf(batteryPercent));
+            if (mIsMQTTConnected) {
+                try {
+                    IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+                    Intent batteryStatus = getApplicationContext().registerReceiver(null, batteryFilter);
+
+                    int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, 0);
+                    int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, 0);
+                    float voltage = batteryStatus.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
+                    float percent = level / (float)scale  * 100;
+                    voltage *= 0.001;
+
+                    String json = String.format("{\"level\":%d,\"scale\":%d,\"percent\":%f,\"voltage\":%f}", level, scale, percent, voltage);
+                    Log.d(TAG, json);
+
+                    mClient.publish(String.format("plugs/%s/batt", mDeviceId), json.getBytes(), 0, false);
+                } catch (MqttException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     };
     // battery sensor end
@@ -157,6 +167,7 @@ public class MainActivity extends AppCompatActivity
 
         SharedPreferences prefs = this.getPreferences(Context.MODE_PRIVATE);
         mServerHostName = prefs.getString(SERVER_KEY, "");
+
         mDeviceId = prefs.getString(DEVICE_ID_KEY, "");
         String targetDeviceIds = prefs.getString(TARGET_DEVICES, "");
         parseDeviceIDs(targetDeviceIds);
@@ -349,8 +360,8 @@ public class MainActivity extends AppCompatActivity
             options.setUserName("kevinw");
             options.setPassword("Test1234".toCharArray());
 
-            //IMqttToken token = mClient.connect(options);
-            IMqttToken token = mClient.connect();
+            IMqttToken token = mClient.connect(options);
+            //IMqttToken token = mClient.connect();
             token.setActionCallback(this);
 
         } catch (MqttException e) {
@@ -579,7 +590,9 @@ public class MainActivity extends AppCompatActivity
     public void onFailure(IMqttToken asyncActionToken, final Throwable exception) {
         // Something went wrong e.g. connection timeout or firewall problems
         Log.d(TAG, "onFailure");
-        Log.d(TAG, exception.getCause().getMessage());
+        Throwable cause = exception.getCause();
+        if(cause != null)
+            Log.d(TAG, cause.getMessage());
         Log.d(TAG, "onFailure");
 
         runOnUiThread(new Runnable() {
