@@ -597,8 +597,16 @@ public class MainActivity extends AppCompatActivity
         // Something went wrong e.g. connection timeout or firewall problems
         Log.d(TAG, "onFailure");
         Throwable cause = exception.getCause();
+<<<<<<< HEAD
+
+        if(cause != null) {
+            Log.d(TAG, exception.getCause().getMessage());
+        }
+
+=======
         if(cause != null)
             Log.d(TAG, cause.getMessage());
+>>>>>>> 486cff7b5984492b66d2173e3ac32a7204a343b9
         Log.d(TAG, "onFailure");
 
         runOnUiThread(new Runnable() {

@@ -21,7 +21,6 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -64,8 +63,6 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity
@@ -80,35 +77,6 @@ public class MainActivity extends AppCompatActivity
     boolean mHasRecorderPermissions = false;
 
     private CameraHelper mCamera;
-
-    // battery sensor begin
-    // https://developer.android.com/training/monitoring-device-state/battery-monitoring.html#java
-    private Timer batteryTimer = new Timer();
-    private TimerTask batteryTask = new TimerTask(){
-        @Override
-        public void run(){
-            if (mIsMQTTConnected) {
-                try {
-                    IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-                    Intent batteryStatus = getApplicationContext().registerReceiver(null, batteryFilter);
-
-                    int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, 0);
-                    int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, 0);
-                    float voltage = batteryStatus.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
-                    float percent = level / (float)scale  * 100;
-                    voltage *= 0.001;
-
-                    String json = String.format("{\"level\":%d,\"scale\":%d,\"percent\":%f,\"voltage\":%f}", level, scale, percent, voltage);
-                    Log.d(TAG, json);
-
-                    mClient.publish(String.format("plugs/%s/batt", mDeviceId), json.getBytes(), 0, false);
-                } catch (MqttException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    };
-    // battery sensor end
 
     private float lastX, lastY, lastZ;
 
@@ -167,7 +135,6 @@ public class MainActivity extends AppCompatActivity
 
         SharedPreferences prefs = this.getPreferences(Context.MODE_PRIVATE);
         mServerHostName = prefs.getString(SERVER_KEY, "");
-
         mDeviceId = prefs.getString(DEVICE_ID_KEY, "");
         String targetDeviceIds = prefs.getString(TARGET_DEVICES, "");
         parseDeviceIDs(targetDeviceIds);
@@ -188,8 +155,6 @@ public class MainActivity extends AppCompatActivity
 
         verifyAppPermissions();
         initAccelerometer();
-
-        batteryTimer.schedule(batteryTask, 1000 * 5, 1000 * 5);
 
         if(mHasRecorderPermissions) {
             initMicophone();
@@ -213,8 +178,6 @@ public class MainActivity extends AppCompatActivity
     private void initMicophone() {
         mSoundMeter = new SoundMeter();
         mSoundMeter.start();
-
-        mSoundMeter.configureServer(mServerHostName, mDeviceId, SERVER_HOST_PORT);
     }
 
     @SuppressLint("MissingPermission")
@@ -341,9 +304,9 @@ public class MainActivity extends AppCompatActivity
 
     private void disconnectFromMQTT() {
         if(mClient != null){
-            mIsMQTTConnected = false;
             mClient.close();
             mClient = null;
+            mIsMQTTConnected = false;
             mMQTTConnectionStatus.setBackgroundColor(Color.GREEN);
             invalidateOptionsMenu();
         }
@@ -353,8 +316,10 @@ public class MainActivity extends AppCompatActivity
         Log.d(TAG, "Connecting to MQTT");
 
         String clientId = MqttClient.generateClientId();
-        mClient = new MqttAndroidClient(this.getApplicationContext(), "tcp://" + mServerHostName + ":1883", clientId);
-        mClient.setCallback(this);
+         mClient = new MqttAndroidClient(this.getApplicationContext(),
+                 "tcp://" + mServerHostName + ":1883",
+                        clientId);
+         mClient.setCallback(this);
 
         try {
             MqttConnectOptions options = new MqttConnectOptions();
@@ -362,8 +327,8 @@ public class MainActivity extends AppCompatActivity
             options.setUserName("kevinw");
             options.setPassword("Test1234".toCharArray());
 
-            IMqttToken token = mClient.connect(options);
-            //IMqttToken token = mClient.connect();
+            //IMqttToken token = mClient.connect(options);
+            IMqttToken token = mClient.connect();
             token.setActionCallback(this);
 
         } catch (MqttException e) {
@@ -421,9 +386,7 @@ public class MainActivity extends AppCompatActivity
 
         mTargetDevices.clear();
         for(String part : ids){
-            if(part != null && part.length()> 0) {
-                mTargetDevices.add(part);
-            }
+            mTargetDevices.add(part);
         }
 
         return true;
@@ -469,8 +432,6 @@ public class MainActivity extends AppCompatActivity
                 if(parseDeviceIDs(idString)) {
                     prefs.edit().putString(TARGET_DEVICES, idString).commit();
                 }
-
-                mSoundMeter.configureServer(mServerHostName, mDeviceId, SERVER_HOST_PORT);
 
                 invalidateOptionsMenu();
             }
@@ -521,7 +482,7 @@ public class MainActivity extends AppCompatActivity
             }
 
             UploadHelper uploader = new UploadHelper(mDeviceId, mServerHostName, SERVER_HOST_PORT);
-            uploader.setMedia(fullFileName, "image/jpeg");
+            uploader.setMedia(fullFileName);
             uploader.execute();
         }
         else {
@@ -596,9 +557,7 @@ public class MainActivity extends AppCompatActivity
     public void onFailure(IMqttToken asyncActionToken, final Throwable exception) {
         // Something went wrong e.g. connection timeout or firewall problems
         Log.d(TAG, "onFailure");
-        Throwable cause = exception.getCause();
-        if(cause != null)
-            Log.d(TAG, cause.getMessage());
+        Log.d(TAG, exception.getCause().getMessage());
         Log.d(TAG, "onFailure");
 
         runOnUiThread(new Runnable() {
@@ -622,13 +581,7 @@ public class MainActivity extends AppCompatActivity
 
         Toast.makeText(MainActivity.this, "Lost connection to MQTT Server", Toast.LENGTH_LONG).show();
 
-        if(cause != null) {
-            Log.d(TAG, "MQTT Server connection lost" + cause.getMessage());
-        }
-        else {
-            Log.d(TAG, "MQTT Server connection lost");
-        }
-
+        Log.d(TAG, "MQTT Server connection lost" + cause.getMessage());
         mIsMQTTConnected = false;
         invalidateOptionsMenu();
     }
@@ -703,7 +656,6 @@ public class MainActivity extends AppCompatActivity
                          mSoundDetected = true;
 
                         sendCaptureMedia();
-                        mSoundMeter.startRecording();
                     }
 
                     mAudioSensorStatus.setBackgroundColor(Color.GREEN);
@@ -715,12 +667,11 @@ public class MainActivity extends AppCompatActivity
                         mSoundDetected = false;
                         mSoundDetectedDateStamp = null;
                         mAudioSensorStatus.setBackgroundColor(Color.LTGRAY);
-                        mSoundMeter.stopRecording();
                     }
                 }
             }
 
-            mNoiseDetectionHandler.postDelayed(detectNoise, 10);
+            mNoiseDetectionHandler.postDelayed(detectNoise, 250);
         }
     };
 

@@ -213,8 +213,6 @@ public class MainActivity extends AppCompatActivity
     private void initMicophone() {
         mSoundMeter = new SoundMeter();
         mSoundMeter.start();
-
-        mSoundMeter.configureServer(mServerHostName, mDeviceId, SERVER_HOST_PORT);
     }
 
     @SuppressLint("MissingPermission")
@@ -421,9 +419,7 @@ public class MainActivity extends AppCompatActivity
 
         mTargetDevices.clear();
         for(String part : ids){
-            if(part != null && part.length()> 0) {
-                mTargetDevices.add(part);
-            }
+            mTargetDevices.add(part);
         }
 
         return true;
@@ -469,8 +465,6 @@ public class MainActivity extends AppCompatActivity
                 if(parseDeviceIDs(idString)) {
                     prefs.edit().putString(TARGET_DEVICES, idString).commit();
                 }
-
-                mSoundMeter.configureServer(mServerHostName, mDeviceId, SERVER_HOST_PORT);
 
                 invalidateOptionsMenu();
             }
@@ -521,7 +515,7 @@ public class MainActivity extends AppCompatActivity
             }
 
             UploadHelper uploader = new UploadHelper(mDeviceId, mServerHostName, SERVER_HOST_PORT);
-            uploader.setMedia(fullFileName, "image/jpeg");
+            uploader.setMedia(fullFileName);
             uploader.execute();
         }
         else {
@@ -622,13 +616,7 @@ public class MainActivity extends AppCompatActivity
 
         Toast.makeText(MainActivity.this, "Lost connection to MQTT Server", Toast.LENGTH_LONG).show();
 
-        if(cause != null) {
-            Log.d(TAG, "MQTT Server connection lost" + cause.getMessage());
-        }
-        else {
-            Log.d(TAG, "MQTT Server connection lost");
-        }
-
+        Log.d(TAG, "MQTT Server connection lost" + cause.getMessage());
         mIsMQTTConnected = false;
         invalidateOptionsMenu();
     }
@@ -703,7 +691,6 @@ public class MainActivity extends AppCompatActivity
                          mSoundDetected = true;
 
                         sendCaptureMedia();
-                        mSoundMeter.startRecording();
                     }
 
                     mAudioSensorStatus.setBackgroundColor(Color.GREEN);
@@ -715,12 +702,11 @@ public class MainActivity extends AppCompatActivity
                         mSoundDetected = false;
                         mSoundDetectedDateStamp = null;
                         mAudioSensorStatus.setBackgroundColor(Color.LTGRAY);
-                        mSoundMeter.stopRecording();
                     }
                 }
             }
 
-            mNoiseDetectionHandler.postDelayed(detectNoise, 10);
+            mNoiseDetectionHandler.postDelayed(detectNoise, 250);
         }
     };
 
