@@ -178,6 +178,8 @@ public class MainActivity extends AppCompatActivity
     private void initMicophone() {
         mSoundMeter = new SoundMeter();
         mSoundMeter.start();
+
+        mSoundMeter.configureServer(mServerHostName, mDeviceId, SERVER_HOST_PORT);
     }
 
     @SuppressLint("MissingPermission")
@@ -386,7 +388,9 @@ public class MainActivity extends AppCompatActivity
 
         mTargetDevices.clear();
         for(String part : ids){
-            mTargetDevices.add(part);
+            if(part != null && part.length()> 0) {
+                mTargetDevices.add(part);
+            }
         }
 
         return true;
@@ -432,6 +436,8 @@ public class MainActivity extends AppCompatActivity
                 if(parseDeviceIDs(idString)) {
                     prefs.edit().putString(TARGET_DEVICES, idString).commit();
                 }
+
+                mSoundMeter.configureServer(mServerHostName, mDeviceId, SERVER_HOST_PORT);
 
                 invalidateOptionsMenu();
             }
@@ -482,7 +488,7 @@ public class MainActivity extends AppCompatActivity
             }
 
             UploadHelper uploader = new UploadHelper(mDeviceId, mServerHostName, SERVER_HOST_PORT);
-            uploader.setMedia(fullFileName);
+            uploader.setMedia(fullFileName, "image/jpeg");
             uploader.execute();
         }
         else {
@@ -557,7 +563,12 @@ public class MainActivity extends AppCompatActivity
     public void onFailure(IMqttToken asyncActionToken, final Throwable exception) {
         // Something went wrong e.g. connection timeout or firewall problems
         Log.d(TAG, "onFailure");
-        Log.d(TAG, exception.getCause().getMessage());
+        Throwable cause = exception.getCause();
+
+        if(cause != null) {
+            Log.d(TAG, exception.getCause().getMessage());
+        }
+
         Log.d(TAG, "onFailure");
 
         runOnUiThread(new Runnable() {
@@ -581,7 +592,13 @@ public class MainActivity extends AppCompatActivity
 
         Toast.makeText(MainActivity.this, "Lost connection to MQTT Server", Toast.LENGTH_LONG).show();
 
-        Log.d(TAG, "MQTT Server connection lost" + cause.getMessage());
+        if(cause != null) {
+            Log.d(TAG, "MQTT Server connection lost" + cause.getMessage());
+        }
+        else {
+            Log.d(TAG, "MQTT Server connection lost");
+        }
+
         mIsMQTTConnected = false;
         invalidateOptionsMenu();
     }
@@ -656,6 +673,7 @@ public class MainActivity extends AppCompatActivity
                          mSoundDetected = true;
 
                         sendCaptureMedia();
+                        mSoundMeter.startRecording();
                     }
 
                     mAudioSensorStatus.setBackgroundColor(Color.GREEN);
@@ -667,11 +685,12 @@ public class MainActivity extends AppCompatActivity
                         mSoundDetected = false;
                         mSoundDetectedDateStamp = null;
                         mAudioSensorStatus.setBackgroundColor(Color.LTGRAY);
+                        mSoundMeter.stopRecording();
                     }
                 }
             }
 
-            mNoiseDetectionHandler.postDelayed(detectNoise, 250);
+            mNoiseDetectionHandler.postDelayed(detectNoise, 10);
         }
     };
 

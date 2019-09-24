@@ -30,6 +30,7 @@ public class UploadHelper extends AsyncTask<Void, Integer, String> {
     private String mDeviceId;
     private String mServerUrl;
     String mMediaFile;
+    String mContentType;
     int mServerPort;
     byte[] mMedia;
     long mTotalSize = 0;
@@ -43,7 +44,8 @@ public class UploadHelper extends AsyncTask<Void, Integer, String> {
         mDeviceId = deviceId;
     }
 
-    public void setMedia(String mediaFile) {
+    public void setMedia(String mediaFile, String contentType) {
+        mContentType = contentType;
         mMediaFile = mediaFile;
         Log.e(MainActivity.TAG, "Setting file to upload: " + mediaFile);
     }
@@ -85,7 +87,7 @@ public class UploadHelper extends AsyncTask<Void, Integer, String> {
 
             httpPost.setEntity(new ByteArrayEntity(content));
 
-            httpPost.addHeader("Content-Type","image/jpeg");
+            httpPost.addHeader("Content-Type",mContentType);
 
             // Making server call
             HttpResponse response = httpclient.execute(httpPost);
