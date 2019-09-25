@@ -166,9 +166,9 @@ public class MainActivity extends AppCompatActivity
         setSupportActionBar(toolbar);
 
         SharedPreferences prefs = this.getPreferences(Context.MODE_PRIVATE);
-        mServerHostName = prefs.getString(SERVER_KEY, "");
+        mServerHostName = prefs.getString(SERVER_KEY, "datacol.sofwerx.iothost.net");
 
-        mDeviceId = prefs.getString(DEVICE_ID_KEY, "");
+        mDeviceId = prefs.getString(DEVICE_ID_KEY, "dev001");
         String targetDeviceIds = prefs.getString(TARGET_DEVICES, "");
         parseDeviceIDs(targetDeviceIds);
 
@@ -691,36 +691,10 @@ public class MainActivity extends AppCompatActivity
         @Override
         public void run() {
             if(mSoundMeter != null) {
-                if(mSoundMeter.getAmplitude() > 1.0) {
-                    if(!mSoundDetected) {
-                        if (mIsMQTTConnected) {
-                             try {
-                                 mClient.publish(String.format("plugs/%s/audio", mDeviceId), "{noise:true}".getBytes(), 0, false);
-                             } catch (MqttException e) {
-                                 e.printStackTrace();
-                             }
-                         }
-                         mSoundDetected = true;
-
-                        sendCaptureMedia();
-                        mSoundMeter.startRecording();
-                    }
-
-                    mAudioSensorStatus.setBackgroundColor(Color.GREEN);
-
-                    mSoundDetectedDateStamp = Calendar.getInstance();
-                }
-                else if(mSoundDetected && mSoundDetectedDateStamp != null){
-                    if ((Calendar.getInstance().getTime().getTime() - mSoundDetectedDateStamp.getTime().getTime()) > 3000) {
-                        mSoundDetected = false;
-                        mSoundDetectedDateStamp = null;
-                        mAudioSensorStatus.setBackgroundColor(Color.LTGRAY);
-                        mSoundMeter.stopRecording();
-                    }
-                }
+                mAudioSensorStatus.setBackgroundColor(mSoundMeter.update() ? Color.GREEN : Color.LTGRAY);
             }
 
-            mNoiseDetectionHandler.postDelayed(detectNoise, 10);
+            mNoiseDetectionHandler.postDelayed(detectNoise, 500);
         }
     };
 

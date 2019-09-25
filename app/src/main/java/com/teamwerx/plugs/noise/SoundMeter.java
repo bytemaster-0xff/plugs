@@ -27,11 +27,8 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Calendar;
-import java.util.Date;
 
 public class SoundMeter {
-    static final private double EMA_FILTER = 0.6;
-
     public enum DetectorState {
         /* Not detecting */
         Idle,
@@ -53,8 +50,6 @@ public class SoundMeter {
      */
 
     private DetectorState mDetectorState = DetectorState.Detecting.Idle;
-    private long mTimeInStateMS = 0;
-    private long mRecordingStarted = 0;
 
     private LocalDateTime mStartTimeInState;
     private LocalDateTime mRecordingStart;
@@ -64,26 +59,22 @@ public class SoundMeter {
     private String mServerName;
     private int mPort;
 
-    private MediaRecorder mMediaDetector = null;
     private MediaRecorder mMediaRecorder = null;
-    private double mEMA = 0.0;
-
-    private String mServer;
 
     private DetectorSettings mDetectorSettings;
 
     public class DetectorSettings {
         /* Audio level to be met to start recording */
-        public double ThreadholdLevel;
+        public double DetectionThreshold;
 
         /*  Maximum amount of time no sound will be recorded prior to the file being recycled.  */
-        public long LoopTime;
+        public long LoopTimeMS;
 
         /* Maximum amount of time audio is recorded before it will be uploaded to the server */
-        public long MaxAudioTimeMS;
+        public long MaxRecordingTimeMS;
 
         /* Number of milliseconds that have passed where threshold is not met. */
-        public long SilencePeriodMS;
+        public long BelowThresholdPeriodMS;
 
     }
 
@@ -95,10 +86,10 @@ public class SoundMeter {
         }
 
         this.mDetectorSettings = new DetectorSettings();
-        this.mDetectorSettings.LoopTime = 5000;
-        this.mDetectorSettings.MaxAudioTimeMS = 15000;
-        this.mDetectorSettings.ThreadholdLevel = 1.0;
-        this.mDetectorSettings.SilencePeriodMS = 5000;
+        this.mDetectorSettings.LoopTimeMS = 5000;
+        this.mDetectorSettings.MaxRecordingTimeMS = 15000;
+        this.mDetectorSettings.DetectionThreshold = 0.5;
+        this.mDetectorSettings.BelowThresholdPeriodMS = 5000;
     }
 
     private String getFullTimeStampFileName() {
@@ -118,34 +109,12 @@ public class SoundMeter {
     }
 
     public void start() {
-        if (mMediaDetector == null) {
-            mMediaDetector = new MediaRecorder();
-            mMediaDetector.setAudioSource(MediaRecorder.AudioSource.MIC);
-            mMediaDetector.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-            mMediaDetector.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
-            mMediaDetector.setOutputFile("/dev/null");
-
-            /*mMediaRecorder.setOnInfoListener(new MediaRecorder.OnInfoListener() {
-                @Override
-                public void onInfo(MediaRecorder mr, int what, int extra) {
-                    if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED) {
-                      //  mMediaRecorder.setNextOutputFile("/dev/null");
-                    }
-                }
-            });*/
-
-            try {
-                mMediaDetector.prepare();
-            }
-            catch (IllegalStateException e) {
-                e.printStackTrace();
-            }
-            catch (IOException e) {
-                e.printStackTrace();
-            }
-            mMediaDetector.start();
-            mEMA = 0.0;
-        }
+        mCurrentFileName = getFullTimeStampFileName();
+        mMediaRecorder = startMediaRecorder((mCurrentFileName));
+        mMediaRecorder.start();
+        mRecordingStart = LocalDateTime.now();
+        mStartTimeInState = LocalDateTime.now();
+        mDetectorState = DetectorState.Detecting;
     }
 
     public void configureServer(String serverName, String deviceId, int port) {
@@ -174,104 +143,101 @@ public class SoundMeter {
         return mediaRecorder;
     }
 
-    public void update() {
-        long millis = ChronoUnit.MILLIS.between(mRecordingStart, LocalDateTime.now());
+    private Boolean audioDetected() {
+        double level = mMediaRecorder.getMaxAmplitude() / 2700.0;
+        Log.d("STATETRANSITION", String.format("audio level %f", level) );
+        return level > this.mDetectorSettings.DetectionThreshold;
+    }
 
-        switch(mDetectorState) {
-            case Detecting:
-                Calendar current = Calendar.getInstance();
+    private void cycleAudio(Boolean upload, Boolean delete) {
+        String oldFileName = mCurrentFileName;
 
-                if(mMediaRecorder.getMaxAmplitude() > this.mDetectorSettings.ThreadholdLevel) {
-                    this.mDetectorState = DetectorState.Recording;
-                }
-                else if(millis > this.mDetectorSettings.LoopTime) {
-                    mMediaRecorder.stop();
-                    mCurrentFileName = getFullTimeStampFileName();
-                    mMediaRecorder = startMediaRecorder((mCurrentFileName));
-                }
+        mMediaRecorder.stop();
+        mCurrentFileName = getFullTimeStampFileName();
+        mMediaRecorder = startMediaRecorder((mCurrentFileName));
+        mMediaRecorder.start();
+        mRecordingStart = LocalDateTime.now();
 
-                break;
-            case Recording:
-                if(millis > this.mDetectorSettings.MaxAudioTimeMS) {
-                    mMediaRecorder.stop();
-                    String oldFileName = mCurrentFileName;
-                    mCurrentFileName = getFullTimeStampFileName();
-                    mMediaRecorder = startMediaRecorder((mCurrentFileName));
-                    uploadFile(oldFileName);
-                }
+        if(delete) {
+            File file = new File(oldFileName);
+            file.delete();
+        }
 
-                break;
-            case PendingCompletion:
-                break;
-                default:
-                    break;
+        if(upload) {
+            uploadFile(oldFileName);
         }
     }
 
-    public void startRecording() {
-        mMediaDetector.stop();
-        mMediaDetector = null;
+    public Boolean update() {
+        long millis = ChronoUnit.MILLIS.between(mRecordingStart, LocalDateTime.now());
+        long timeInState = ChronoUnit.MILLIS.between(mStartTimeInState, LocalDateTime.now());
 
-        mCurrentFileName = getFullTimeStampFileName();
+        switch(mDetectorState) {
+            case Detecting:
+                if(audioDetected()) {
+                    Log.d("STATETRANSITION", "Detected Sound.");
+                    this.mDetectorState = DetectorState.Recording;
+                    mStartTimeInState = LocalDateTime.now();
+                    return true;
+                }
+                else if(millis > this.mDetectorSettings.LoopTimeMS) {
+                    cycleAudio(false, true);
 
-        mMediaRecorder = startMediaRecorder(mCurrentFileName);
+                    Log.d("STATETRANSITION", "No sound detected, recycling file.");
+                }
 
-        mMediaRecorder.start();
+                return false;
+
+            case Recording:
+                if(millis > this.mDetectorSettings.MaxRecordingTimeMS) {
+                    cycleAudio(true, false);
+
+                    Log.d("STATETRANSITION", "Max recording reached uploading sample.");
+                }
+
+                if(!audioDetected()) {
+                    mStartTimeInState = LocalDateTime.now();
+                    mDetectorState = DetectorState.PendingCompletion;
+
+                    Log.d("STATETRANSITION", "Detected silence.");
+                    return false;
+                }
+                else {
+                    return true;
+                }
+
+            case PendingCompletion:
+                if(timeInState > this.mDetectorSettings.BelowThresholdPeriodMS) {
+                    Log.d("STATETRANSITION", "Silence long enough to terminate event, detecting.");
+
+                    cycleAudio(true, false);
+
+                    this.mDetectorState = DetectorState.Detecting;
+                    mStartTimeInState = LocalDateTime.now();
+
+                    return false;
+                }
+                else  if(audioDetected()) {
+                    this.mDetectorState = DetectorState.Recording;
+                    mStartTimeInState = LocalDateTime.now();
+
+                    Log.d("STATETRANSITION", "Silence broken, continuing to read.");
+                    return true;
+                }
+                default:
+                    return false;
+        }
     }
 
     private void uploadFile(String fileName) {
+        Log.d("STATETRANSITION", "Uploading => " + fileName);
         if(mDeviceId != null && mDeviceId.length() > 0 && mServerName != null && mServerName.length() > 0) {
             UploadHelper uploader = new UploadHelper(mDeviceId, this.mServerName, this.mPort);
             uploader.setMedia(fileName, "audio/3gpp");
             uploader.execute();
         }
-    }
-
-    public void stopRecording() {
-        mMediaRecorder.stop();
-        mMediaRecorder = null;
-
-
-        mCurrentFileName = null;
-
-        mMediaDetector = new MediaRecorder();
-        mMediaDetector.setAudioSource(MediaRecorder.AudioSource.MIC);
-        mMediaDetector.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-        mMediaDetector.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
-        mMediaDetector.setOutputFile("/dev/null");
-        try {
-            mMediaDetector.prepare();
+        else {
+            Log.d("STATETRANSITION", "Not Configured.");
         }
-        catch (IllegalStateException e) {
-            e.printStackTrace();
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-        mMediaDetector.start();
-    }
-
-    public void stop() {
-        if (mMediaDetector != null) {
-            mMediaDetector.stop();
-            mMediaDetector.release();
-            mMediaDetector = null;
-        }
-    }
-
-    public double getAmplitude() {
-        if(mMediaRecorder != null)
-            return  (mMediaRecorder.getMaxAmplitude()/2700.0);
-
-        if (mMediaDetector != null)
-            return  (mMediaDetector.getMaxAmplitude()/2700.0);
-        else
-            return 0;
-    }
-
-    public double getAmplitudeEMA() {
-        double amp = getAmplitude();
-        mEMA = EMA_FILTER * amp + (1.0 - EMA_FILTER) * mEMA;
-        return mEMA;
     }
 }
