@@ -35,7 +35,10 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -78,6 +81,9 @@ public class MainActivity extends AppCompatActivity
     boolean mHasGPSPermissions = false;
     boolean mHasCemeraPermissions = false;
     boolean mHasRecorderPermissions = false;
+
+    CheckBox mSendLocation;
+    CheckBox mSendAudio;
 
     private CameraHelper mCamera;
 
@@ -180,6 +186,21 @@ public class MainActivity extends AppCompatActivity
         mLocationStatus = findViewById(R.id.locationStatusDisplay);
         mLocationInfo = findViewById(R.id.locationStatus);
         mAudioSensorStatus = findViewById(R.id.audioSensorStatus);
+
+        mSendAudio = findViewById(R.id.recordingOn);
+        mSendAudio.setOnCheckedChangeListener(new CheckBox.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                mSoundMeter.setShouldUploadAudio(isChecked);
+            }
+        });
+        mSendLocation = findViewById(R.id.sendLocationOn);
+        mSendLocation.setOnCheckedChangeListener(new CheckBox.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                mSoundMeter.setShouldUploadLocation(isChecked);
+            }
+        });
 
         mExternalSensorStatus = findViewById(R.id.externalSensorStatus);
         mExternalSensorMotionStatus = findViewById(R.id.externalSensorMotionStatus);
@@ -521,6 +542,9 @@ public class MainActivity extends AppCompatActivity
             }
 
             UploadHelper uploader = new UploadHelper(mDeviceId, mServerHostName, SERVER_HOST_PORT);
+            if(mLastLocation != null) {
+                uploader.setLocation(mLastLocation.getLatitude(), mLastLocation.getLongitude());
+            }
             uploader.setMedia(fullFileName, "image/jpeg");
             uploader.execute();
         }
@@ -756,13 +780,14 @@ public class MainActivity extends AppCompatActivity
             mLocationStatus.setBackgroundColor(Color.GREEN);
             String locationUpdate = String.format("Lat: %.4f, Lon: %.4f", mLastLocation.getLatitude(), mLastLocation.getLongitude());
             mLocationInfo.setText(locationUpdate);
+            mSoundMeter.setLastLocation(location);
         }
         else {
             mLocationStatus.setBackgroundColor(Color.RED);
             mLocationInfo.setText("Location unavailable");
+            mSoundMeter.setLastLocation(null);
         }
     }
-
 
     @Override
     public void onLocationChanged(Location location) {

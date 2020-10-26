@@ -31,11 +31,16 @@ public class UploadHelper extends AsyncTask<Void, Integer, String> {
     private String mServerUrl;
     String mMediaFile;
     String mContentType;
+    double mLatitude;
+    double mLongitude;
     int mServerPort;
     byte[] mMedia;
     long mTotalSize = 0;
 
-
+    public void setLocation(double lat, double lon){
+        mLatitude = lat;
+        mLongitude = lon;
+    }
 
     public UploadHelper(String deviceId,
                         String serverUrl, int serverPort){
@@ -88,6 +93,10 @@ public class UploadHelper extends AsyncTask<Void, Integer, String> {
             httpPost.setEntity(new ByteArrayEntity(content));
 
             httpPost.addHeader("Content-Type",mContentType);
+            if(mLongitude != 0 && mLatitude != 0) {
+                httpPost.addHeader("x-latitude", String.valueOf(mLatitude));
+                httpPost.addHeader("x-longitude", String.valueOf(mLongitude));
+            }
 
             // Making server call
             HttpResponse response = httpclient.execute(httpPost);

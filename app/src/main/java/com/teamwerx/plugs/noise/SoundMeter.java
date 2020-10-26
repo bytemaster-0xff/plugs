@@ -16,6 +16,7 @@
 
 package com.teamwerx.plugs.noise;
 
+import android.location.Location;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.util.Log;
@@ -30,6 +31,9 @@ import java.util.Calendar;
 
 public class SoundMeter {
     public enum DetectorState {
+        /* Error */
+        Error,
+
         /* Not detecting */
         Idle,
 
@@ -93,7 +97,7 @@ public class SoundMeter {
     }
 
     private String getFullTimeStampFileName() {
-        String deviceId = mDeviceId == null || mDeviceId.length() == 0 ? "????" : mDeviceId;
+        String deviceId = mDeviceId == null || mDeviceId.length() == 0 ? "generic" : mDeviceId;
         Calendar current = Calendar.getInstance();
 
         String fileName = String.format("%s_%04d%02d%02d%02d%02d%02d",
@@ -109,12 +113,21 @@ public class SoundMeter {
     }
 
     public void start() {
-        mCurrentFileName = getFullTimeStampFileName();
-        mMediaRecorder = startMediaRecorder((mCurrentFileName));
-        mMediaRecorder.start();
-        mRecordingStart = LocalDateTime.now();
-        mStartTimeInState = LocalDateTime.now();
-        mDetectorState = DetectorState.Detecting;
+        try {
+            mCurrentFileName = getFullTimeStampFileName();
+            mMediaRecorder = startMediaRecorder((mCurrentFileName));
+            if(mMediaRecorder != null)
+            {
+                mMediaRecorder.start();
+                mRecordingStart = LocalDateTime.now();
+                mStartTimeInState = LocalDateTime.now();
+                mDetectorState = DetectorState.Detecting;
+            }
+        }
+        catch(Exception ex){
+            Log.d("AUDIO", "Could not start media recorder.");
+            mDetectorState = DetectorState.Error;
+        }
     }
 
     public void configureServer(String serverName, String deviceId, int port) {
@@ -132,15 +145,16 @@ public class SoundMeter {
 
         try {
             mediaRecorder.prepare();
+            return mediaRecorder;
         }
         catch (IllegalStateException e) {
             e.printStackTrace();
+            return null;
         }
         catch (IOException e) {
             e.printStackTrace();
+            return null;
         }
-
-        return mediaRecorder;
     }
 
     private Boolean audioDetected() {
@@ -169,6 +183,10 @@ public class SoundMeter {
     }
 
     public Boolean update() {
+        if(mDetectorState == DetectorState.Error){
+            return false;
+        }
+
         long millis = ChronoUnit.MILLIS.between(mRecordingStart, LocalDateTime.now());
         long timeInState = ChronoUnit.MILLIS.between(mStartTimeInState, LocalDateTime.now());
 
@@ -229,12 +247,45 @@ public class SoundMeter {
         }
     }
 
+    private Location mLastLocation;
+    private boolean mShouldUploadAudio = false;
+    private boolean mShouldUploadLocation = false;
+
+    public void setLastLocation(Location location){
+        mLastLocation = location;
+    }
+
+    public void setShouldUploadAudio(boolean shouldUpload) {
+        mShouldUploadAudio = shouldUpload;
+    }
+
+    public void setShouldUploadLocation(boolean shouldUploadLocation) {
+        mShouldUploadLocation = shouldUploadLocation;
+    }
+
     private void uploadFile(String fileName) {
         Log.d("STATETRANSITION", "Uploading => " + fileName);
+
+        if(!mShouldUploadAudio) {
+            Log.d("STATETRANSITION", "Not enabled to upload audio.");
+            return;
+        }
+
         if(mDeviceId != null && mDeviceId.length() > 0 && mServerName != null && mServerName.length() > 0) {
             UploadHelper uploader = new UploadHelper(mDeviceId, this.mServerName, this.mPort);
+            if(mLastLocation != null && mShouldUploadLocation) {
+                uploader.setLocation(mLastLocation.getLatitude(), mLastLocation.getLongitude());
+                Log.d("STATETRANSITION", "Location was sent.");
+            }
+            else {
+                Log.d("STATETRANSITION", "Location not sent.");
+
+                uploader.setLocation(0, 0);
+            }
             uploader.setMedia(fileName, "audio/3gpp");
             uploader.execute();
+
+            Log.d("STATETRANSITION", "Audio uploaded.");
         }
         else {
             Log.d("STATETRANSITION", "Not Configured.");
